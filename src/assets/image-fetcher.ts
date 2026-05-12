@@ -1,6 +1,7 @@
 import axios from "axios";
-import { writeFile, mkdir } from "node:fs/promises";
+import { writeFile, mkdir, copyFile, access } from "node:fs/promises";
 import { dirname } from "node:path";
+import { existsSync } from "node:fs";
 
 export interface FetchResult {
   success: boolean;
@@ -9,7 +10,27 @@ export interface FetchResult {
 }
 
 export async function fetchImage(url: string | null, outPath: string): Promise<FetchResult> {
+  // IDEMPOTENT: if the image already exists at outPath, reuse it.
+  // This lets users pre-place generated images (e.g. from AI image generation)
+  // and skip the download step.
+  if (existsSync(outPath)) {
+    return { success: true, path: outPath };
+  }
+
   if (!url) return { success: false, reason: "no url provided (null)" };
+
+  // Support local file paths (absolute path or file:// URL)
+  const localPath = url.startsWith("file://") ? url.slice(7) : null;
+  if (localPath || (url.startsWith("/") && existsSync(url))) {
+    try {
+      const src = localPath ?? url;
+      await mkdir(dirname(outPath), { recursive: true });
+      await copyFile(src, outPath);
+      return { success: true, path: outPath };
+    } catch (e: any) {
+      return { success: false, reason: `local file copy failed: ${e.message}` };
+    }
+  }
 
   try {
     const resp = await axios.get<ArrayBuffer>(url, {

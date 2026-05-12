@@ -1,0 +1,140 @@
+{
+  "version": "1.0",
+  "metadata": {
+    "title": "YupVid biến bài viết thành video ngắn",
+    "source": {
+      "url": "local",
+      "domain": "demo.local",
+      "image": "file:///tmp/demo-image.jpg"
+    },
+    "channel": "Công nghệ 24h"
+  },
+  "voice": { "provider": "lucylab", "voiceId": "${VIETNAMESE_VOICEID}", "speed": 1.0 },
+  "scenes": [
+    {
+      "id": "hook",
+      "type": "hook",
+      "voiceText": "Một bài viết có thể biến thành video ngắn chỉ sau vài thao tác.",
+      "templateData": {
+        "template": "hook",
+        "headline": "Bài viết thành video",
+        "subhead": "Trong vài phút",
+        "bgSrc": "$source.image",
+        "kenBurns": "pan-right"
+      },
+      "caption": {
+        "badge": "AI VIDEO",
+        "headline": "Bài viết thành video ngắn",
+        "subline": "Tự động từ kịch bản đến render"
+      },
+      "creative": {
+        "tone": "social",
+        "accent": "rose",
+        "background": "source-image",
+        "motion": "pan-right",
+        "density": "high-energy"
+      }
+    },
+    {
+      "id": "body-1",
+      "type": "body",
+      "voiceText": "Đầu tiên, bạn dán bài viết hoặc ý tưởng vào hệ thống.",
+      "templateData": {
+        "template": "steps",
+        "title": "Quy trình tạo video",
+        "steps": ["Dán bài viết", "AI viết kịch bản", "Chọn ảnh minh họa", "Render trên server"]
+      },
+      "caption": {
+        "badge": "WORKFLOW",
+        "headline": "Không cần dựng thủ công"
+      },
+      "creative": {
+        "tone": "studio",
+        "accent": "lime",
+        "background": "abstract",
+        "motion": "push-in",
+        "density": "balanced"
+      }
+    },
+    {
+      "id": "body-2",
+      "type": "body",
+      "voiceText": "Hệ thống có thể lấy ảnh trong bài, tìm ảnh stock, hoặc dùng AI để tạo ảnh mới.",
+      "templateData": {
+        "template": "image-card",
+        "kicker": "ASSET PICKER",
+        "title": "Ảnh không còn là khâu tắc",
+        "detail": "Nguồn bài viết, stock image hoặc AI image"
+      },
+      "caption": {
+        "headline": "Ảnh đúng ngữ cảnh",
+        "subline": "Quan trọng hơn hiệu ứng màu mè"
+      },
+      "creative": {
+        "tone": "editorial",
+        "accent": "cyan",
+        "background": "split",
+        "motion": "pull-out",
+        "density": "balanced"
+      },
+      "assetPrompt": "Vietnamese creator dashboard selecting vertical images for short video production"
+    },
+    {
+      "id": "body-3",
+      "type": "body",
+      "voiceText": "Điểm hay là mọi thứ chạy nền, nên bạn không cần mở máy trong lúc render.",
+      "templateData": {
+        "template": "quote",
+        "quote": "Render chạy trên server, không phụ thuộc máy cá nhân.",
+        "attribution": "Điểm khác biệt chính"
+      },
+      "caption": {
+        "badge": "SERVER",
+        "headline": "Không cần máy mạnh"
+      },
+      "creative": {
+        "tone": "minimal",
+        "accent": "purple",
+        "background": "gradient",
+        "motion": "float",
+        "density": "calm"
+      }
+    },
+    {
+      "id": "body-4",
+      "type": "body",
+      "voiceText": "Sau đó bạn chọn nền tảng đăng, đặt lịch, và hệ thống tự xử lý phần còn lại.",
+      "templateData": {
+        "template": "timeline",
+        "title": "Từ nhập bài đến đăng",
+        "items": [
+          { "label": "Bước một", "value": "Nhập nội dung" },
+          { "label": "Bước hai", "value": "Tạo video" },
+          { "label": "Bước ba", "value": "Đặt lịch đăng" }
+        ]
+      },
+      "caption": {
+        "headline": "Có thể mở rộng sang tự đăng",
+        "subline": "Facebook, TikTok, Shorts, Reels"
+      },
+      "creative": {
+        "tone": "breaking",
+        "accent": "amber",
+        "background": "abstract",
+        "motion": "snap",
+        "density": "high-energy"
+      }
+    },
+    {
+      "id": "outro",
+      "type": "outro",
+      "voiceText": "Theo dõi Công nghệ 24h để xem thêm các công cụ AI thực chiến.",
+      "templateData": {
+        "template": "outro",
+        "ctaTop": "Theo dõi ngay",
+        "channelName": "Công nghệ 24h",
+        "source": "demo.local"
+      }
+    }
+  ]
+}

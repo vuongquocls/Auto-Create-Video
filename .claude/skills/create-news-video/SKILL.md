@@ -1,378 +1,226 @@
 ---
 name: create-news-video
-description: Tạo video tin tức ngắn 9:16 (~60s) từ URL bài báo hoặc file .txt tiếng Việt. Trigger khi user yêu cầu tạo video tin tức, làm short news, làm bản tin video, render tin thành video, làm TikTok tin tức. Output: video.mp4 + voice.mp3 + script.txt cho CapCut.
+description: Tạo video ngắn 9:16 chất lượng cao từ URL bài báo, file .txt, hoặc ý tưởng tiếng Việt. Pipeline sinh storyboard, voice script, visual direction, caption, TTS và render MP4.
 ---
 
-# Create News Video Skill
+# Create News Video
 
-Generate a Vietnamese 9:16 motion-graphic news video from a URL or .txt file.
+Generate a Vietnamese short-form video from a URL, `.txt` file, or raw idea. The goal is a polished social video, not a static slide deck.
+
+## Brand Image System
+
+Always use the built-in YokDon image brand system unless the user explicitly asks for another style.
+
+Brand source files:
+
+- `brands/yokdon/visual_guideline.md`
+- `brands/yokdon/prompt_template.json`
+
+For every hook/body scene that would benefit from imagery, write a concrete `assetPrompt`. The pipeline will automatically expand that short scene prompt into a full brand-consistent image prompt and export it to `brand-asset-prompts.json`.
+
+`assetPrompt` rules:
+
+- Describe the actual visual subject, action, place, and time of day.
+- Make it image-generator ready, but keep it short; do not repeat the full brand guideline.
+- Prefer Yok Don-specific details: dry dipterocarp forest, Serepok river, rangers, villagers, conservation work, wildlife traces, dust, bark, leaves, river reflections.
+- Do not ask for text in the image. Captions are rendered by the video template, not baked into generated images.
+- Write prompts that work in vertical 9:16 and leave a safe center crop for social UI.
 
 ## Input
 
-Single argument: a news article URL (starts with `http://` or `https://`) OR a path to a `.txt` file.
+Accept one argument:
 
-## Workflow (MUST follow these steps in order)
+- URL starting with `http://` or `https://`
+- Local `.txt` file
+- Raw idea/topic text
 
-### Step 1: Detect input type
+## Workflow
 
-- Starts with `http://` or `https://` → URL mode
-- Otherwise → file mode
+### 1. Extract Source
 
-### Step 2: Fetch content
+URL mode:
 
-**URL mode:**
-- Use `WebFetch` with prompt:
-  ```
-  Trích xuất từ trang này:
-  - title (string): tiêu đề bài báo
-  - content (string): nội dung chính, ~500-1500 từ
-  - ogImage (string|null): URL ảnh og:image (meta og:image hoặc ảnh đầu bài)
-  - domain (string): domain của URL (vd "vnexpress.net")
-  Trả về JSON với 4 field trên.
-  ```
-- If WebFetch fails (paywall, JS-rendered, 4xx) → tell user to save content to a .txt file and pass that instead. Stop.
+- Fetch article title, main content, domain, and `og:image`.
+- If the page is blocked, ask the user for pasted text or a `.txt` file.
 
-**File mode:**
-- Use `Read` to read the .txt file
-- Title = first non-empty line (strip whitespace, max 80 chars)
-- Content = remaining lines joined
-- ogImage = `null`
-- domain = `"local"`
+File mode:
 
-### Step 3: Create slug + output directory
+- Title = first non-empty line.
+- Content = remaining text.
+- Domain = `local`.
+- Image = `null`.
 
-- slug = lowercase ASCII (strip Vietnamese diacritics, đ→d), replace non-alphanumeric with `-`, trim dashes, max 40 chars
-- timestamp = current local time as `YYYYMMDD-HHmm`
-- outputDir = `output/<slug>-<timestamp>/`
-- Use Bash: `mkdir -p <outputDir>`
+Idea mode:
 
-### Step 4: Generate script.json
+- Treat the input as content brief.
+- Domain = `idea`.
+- Image = `null`.
 
-Following the schema in `docs/superpowers/specs/2026-04-29-auto-news-video-design.md` Section 4. Key rules:
+### 2. Create Output Directory
 
-**Script content (Vietnamese):**
-- Total voiceText: ~150–200 words → ~55–65s spoken at speed 1.0
-- Number of scenes: **5–8** (1 hook + 3–6 body + 1 outro)
-- Each scene voiceText is 1-3 short sentences, văn nói (spoken style, not formal)
-- No emoji, no markdown in voiceText
+Create `output/<ascii-slug>-<YYYYMMDD-HHmm>/`.
 
-### ⚠️ CRITICAL: Vietnamese TTS Phonetic Rules
+Slug rules: lowercase ASCII, remove Vietnamese accents, replace non-alphanumeric runs with `-`, trim dashes, max 40 chars.
 
-The `voiceText` field is read aloud by LucyLab/ElevenLabs Vietnamese TTS. **Numbers and symbols are read literally** — if you write "5.5", TTS may say "năm rưỡi" (five and a half — WRONG for version numbers). **Always spell out numbers in Vietnamese phonetic form** in `voiceText`. The `templateData` fields (visual text on screen) can keep the original "5.5" / "82.7%" formatting.
+### 3. Write High-Quality Storyboard
 
-**Mandatory rules for `voiceText`:**
+Write `<outputDir>/script.json` using the current renderer schema. Do not use the old `visual` object.
 
-| Number form | WRONG (TTS misreads) | RIGHT (spell out in Vietnamese) |
-|---|---|---|
-| Decimal version | `GPT 5.5` → "năm rưỡi" ❌ | `GPT năm chấm năm` ✅ |
-| Decimal stat | `82.7%` | `tám mươi hai phẩy bảy phần trăm` |
-| Version | `iPhone 17` | `iPhone mười bảy` (or `iPhone 17` works for whole numbers) |
-| Version with point | `iOS 18.2` | `iOS mười tám chấm hai` |
-| Tech spec | `200MP` | `hai trăm megapixel` |
-| Battery | `5000mAh` | `năm nghìn miliampe giờ` |
-| Tokens | `1M tokens` / `1000000 tokens` | `một triệu token` |
-| Price VND | `21 triệu đồng` | `hai mươi mốt triệu đồng` |
-| Price USD | `$5` | `năm đô la` (or `năm đô`) |
-| Multiplier | `2x` | `gấp đôi` (more natural than "hai lần") |
-| Year | `2026` | `hai nghìn không trăm hai mươi sáu` (or just `năm 2026` reads OK) |
-| Percentage with decimal | `30%` | `ba mươi phần trăm` |
-| Time | `60 giây` | `sáu mươi giây` |
-| Frequency | `5G` | `năm gờ` (be careful — TTS often says "năm-gờ") |
+Required top-level shape:
 
-**Notation choices:**
-- For decimal point use `chấm` (more spoken/natural) or `phẩy` (formal). Both work; pick consistent.
-- For comma separator, use `phẩy` (e.g. "1,000" → "một nghìn")
-- For ratio "3:1" → say `ba trên một` or `ba so với một`
-
-**English brand names — keep as-is**, TTS handles them OK:
-- `Apple`, `Google`, `OpenAI`, `Microsoft`, `TikTok`, `YouTube` ✅
-
-**English acronyms — write phonetically if TTS misreads:**
-- `AI` → usually OK, sometimes write `ây ai` for clarity
-- `API` → write `ây pi ai` if matter
-- `GPT` → usually OK; if not, write `gí pi tí`
-- `iOS` → write `ai ô ét` if matter
-
-**Symbols to AVOID in voiceText:**
-- `→` `&` `%` `$` `#` `+` `=` (TTS may say literal name or skip)
-- `!` `?` at end of sentence is OK — they create natural intonation
-- Emoji: NEVER (TTS pronounces or skips inconsistently)
-- URLs: NEVER (TTS reads dot/slash literally)
-
-**End each `voiceText` sentence with `.` or `?`** for natural pause/intonation.
-
-**Examples — full scene:**
-
-WRONG (will sound bad):
-```json
-{ "voiceText": "GPT 5.5 đạt 82.7% trên Terminal-Bench, vượt GPT 5.4 (75.1%)." }
-```
-→ TTS reads: "GPT năm rưỡi đạt tám mươi hai chấm bảy phần trăm trên Terminal-Bench..."
-
-RIGHT (natural):
-```json
-{ "voiceText": "GPT năm chấm năm đạt tám mươi hai phẩy bảy phần trăm trên Terminal Bench, vượt phiên bản năm chấm bốn ở mức bảy mươi lăm phẩy một." }
-```
-
-**Note**: `templateData` (text on screen) CAN use original formatting — the visual is separate from spoken:
 ```json
 {
-  "voiceText": "GPT năm chấm năm đạt tám mươi hai phẩy bảy phần trăm.",
-  "templateData": {
-    "template": "stat-hero",
-    "value": "82.7%",                 ← Visual: keep readable formatting
-    "label": "Terminal-Bench"
-  }
+  "version": "1.0",
+  "metadata": {
+    "title": "string",
+    "source": {
+      "url": "string",
+      "domain": "string",
+      "image": "https://... or null"
+    },
+    "channel": "Quoc YokDon"
+  },
+  "voice": {
+    "provider": "lucylab",
+    "voiceId": "${VIETNAMESE_VOICEID}",
+    "speed": 1
+  },
+  "scenes": []
 }
 ```
 
-**Hook (most important — gets first 3 seconds of viewer attention):**
-- Must contain a claim, statistic, or curious question
-- NEVER generic ("Hôm nay chúng ta sẽ nói về..." is wrong)
-- ALWAYS include at least 1 effect: `flash-white-3f` or `particle-burst`
+Scene count:
 
-**Visual rules:**
-- For image scenes: `background.src = "$source.image"` (literal — CLI substitutes)
-- Vary `kenBurns` across scenes (don't use `zoom-in` for every scene)
-- Vary text `animation` (don't use `slide-up` for every line)
-- Each line ≤ 25 characters
-- Each scene 1-3 lines
+- 6-8 scenes for normal videos.
+- Scene 1 must be `type: "hook"`.
+- Last scene must be `type: "outro"`.
+- Total voice script: 150-210 Vietnamese words for roughly 50-70 seconds.
 
-**Outro (always fixed format):**
+Each non-outro scene should include:
+
 ```json
 {
-  "id": "outro",
-  "type": "outro",
-  "voiceText": "Theo dõi Công nghệ 24h để xem bản tin mới mỗi ngày.",
-  "visual": {
-    "background": { "type": "gradient", "preset": "outro-purple" },
-    "text": {
-      "position": "center",
-      "style": "outro-card",
-      "lines": [
-        { "content": "Xem bản tin mới mỗi ngày", "emphasis": "primary", "animation": "fade-in" },
-        { "content": "Công nghệ 24h",            "emphasis": "channel", "animation": "scale-pop" },
-        { "content": "Nguồn: <DOMAIN>",          "emphasis": "muted",   "animation": "fade-in-late" }
-      ]
-    }
-  }
+  "id": "body-1",
+  "type": "body",
+  "voiceText": "Vietnamese spoken narration.",
+  "templateData": {},
+  "caption": {
+    "badge": "short label",
+    "headline": "short on-screen caption",
+    "subline": "optional supporting line"
+  },
+  "creative": {
+    "tone": "studio",
+    "accent": "cyan",
+    "background": "abstract",
+    "motion": "push-in",
+    "density": "balanced"
+  },
+  "assetPrompt": "optional visual prompt for image generation or stock search"
 }
 ```
-Replace `<DOMAIN>` with the actual domain string. Note: outro line 1 is shortened to fit 25-char schema rule (full CTA "Theo dõi để xem bản tin mới mỗi ngày" is 36 chars).
 
-### Step 5: Self-validate before writing
+If the source image is generic, missing, or not visually useful, prefer `assetPrompt` over `source-image`. The renderer can still use a fallback, but `brand-asset-prompts.json` becomes the queue for creating better scene images.
 
-Check:
-- Total word count ~150-200
-- Every line.content ≤ 25 chars
-- 5-8 scenes total
-- scenes[0].type === "hook"
-- last scene type === "outro"
-- All enum values valid (see spec Section 4.2)
+## Template Selection
 
-If invalid, fix yourself silently. Up to 2 self-correction passes. After that, write anyway — the CLI's Zod validation will produce a precise error message that the user can act on.
+Use varied templates. Avoid repeating the same body layout back to back.
 
-### Step 6: Write script.json
+Available templates:
 
-Use the Write tool (not Bash) to write the validated JSON to `<outputDir>/script.json`.
+- `hook`: strong first scene with headline and subhead.
+- `image-card`: when a visual object/product/person/place matters.
+- `steps`: when explaining a process.
+- `timeline`: when showing sequence, schedule, or cause-effect.
+- `stat-hero`: when a number is the story.
+- `comparison`: when contrasting two choices/entities.
+- `feature-list`: when grouping benefits or facts.
+- `quote`: when the key point is a claim or takeaway.
+- `callout`: when one statement needs emphasis.
+- `outro`: final CTA.
 
-### Step 7: Run the pipeline
+Template data shapes:
 
-Use Bash, **foreground** (not background), stream output:
+```json
+{ "template": "hook", "headline": "max 40", "subhead": "max 40", "bgSrc": "$source.image", "kenBurns": "zoom-in" }
+{ "template": "image-card", "kicker": "max 24", "title": "max 48", "detail": "max 70" }
+{ "template": "steps", "title": "max 42", "steps": ["2-4 items, each max 46"] }
+{ "template": "timeline", "title": "max 42", "items": [{ "label": "max 24", "value": "max 44" }] }
+{ "template": "stat-hero", "value": "max 20", "label": "max 40", "context": "max 50" }
+{ "template": "comparison", "left": { "label": "max 30", "value": "max 20", "color": "cyan" }, "right": { "label": "max 30", "value": "max 20", "color": "purple", "winner": true } }
+{ "template": "feature-list", "title": "max 40", "bullets": ["1-4 items, each max 50"] }
+{ "template": "quote", "quote": "max 120", "attribution": "max 40" }
+{ "template": "callout", "statement": "max 80", "tag": "max 20" }
+{ "template": "outro", "ctaTop": "Theo dõi ngay", "channelName": "Quoc YokDon", "source": "<domain>" }
+```
+
+Creative options:
+
+- `tone`: `studio`, `editorial`, `breaking`, `social`, `cinematic`, `minimal`
+- `accent`: `cyan`, `purple`, `amber`, `rose`, `lime`, `blue`
+- `background`: `source-image`, `abstract`, `gradient`, `split`, `none`
+- `motion`: `push-in`, `pull-out`, `pan-left`, `pan-right`, `snap`, `float`
+- `density`: `calm`, `balanced`, `high-energy`
+
+Quality rules:
+
+- Hook must start with tension, surprise, payoff, or a concrete number.
+- `voiceText` must sound spoken, not like a formal article.
+- Captions are short, punchy, and not identical to the voice text.
+- Use `assetPrompt` for every scene that would benefit from generated/stock imagery.
+- Asset prompts must follow the YokDon brand image system: cinematic documentary realism, Earth & Muted palette, natural low-key golden hour light, 35mm lens language, layered foreground, dry forest texture.
+- Favor specific visuals over generic AI words: show objects, dashboards, places, people, devices, or diagrams.
+- Use `source-image` or `split` only if the source image is relevant.
+- Do not use emoji or markdown in `voiceText`.
+
+Vietnamese TTS phonetic rules:
+
+- Spell decimal/version numbers in `voiceText`: `GPT năm chấm năm`, not `GPT 5.5`.
+- Spell percentages: `tám mươi hai phẩy bảy phần trăm`, not `82.7%`.
+- Avoid symbols in `voiceText`: `%`, `$`, `→`, `&`, `#`, `+`, `=`.
+- Keep English brand names as-is if common: `OpenAI`, `Apple`, `TikTok`.
+- Write acronyms phonetically if needed: `API` can be `ây pi ai`.
+
+### 4. Validate Before Running
+
+Check silently:
+
+- `script.json` parses as valid JSON.
+- 5-8 scenes.
+- First scene is hook, last scene is outro.
+- `templateData.template` matches one supported template.
+- Field lengths fit schema.
+- Voice script is 150-210 words.
+- No old `visual` object.
+
+### 5. Run Pipeline
+
+Run from project root:
 
 ```bash
 npm run pipeline -- <outputDir>/script.json
 ```
 
-If exit code != 0:
-- Report the error message clearly
-- Tell user the output dir path so they can inspect intermediate files
+If it fails, report the precise error and the output directory.
 
-### Step 8: Report success
+### 6. Report Result
 
-If successful, report to user with markdown links:
+Return links:
 
 ```markdown
-✓ Video:  [video.mp4](output/<slug>-<timestamp>/video.mp4)
-✓ Audio:  [voice.mp3](output/<slug>-<timestamp>/voice.mp3) — for CapCut
-✓ Script: [script.txt](output/<slug>-<timestamp>/script.txt) — for CapCut auto-caption
-Tổng thời lượng: XX.Xs
+Video:  [video.mp4](output/.../video.mp4)
+Audio:  [voice.mp3](output/.../voice.mp3)
+Script: [script.txt](output/.../script.txt)
 ```
 
-## Examples
+## Recommended Story Arc
 
-### Example 1: URL with image (vnexpress)
+For tool/product/news videos:
 
-User: `/create-news-video https://vnexpress.net/iphone-17-200mp`
-
-Generated `script.json` (excerpt):
-```json
-{
-  "version": "1.0",
-  "metadata": {
-    "title": "Apple ra mắt iPhone 17 với camera 200MP",
-    "source": {
-      "url": "https://vnexpress.net/iphone-17-200mp",
-      "domain": "vnexpress.net",
-      "image": "https://i1-vnexpress.vnecdn.net/iphone17.jpg"
-    },
-    "channel": "Công nghệ 24h"
-  },
-  "voice": { "provider": "lucylab", "voiceId": "${VIETNAMESE_VOICEID}", "speed": 1.0 },
-  "scenes": [
-    {
-      "id": "hook", "type": "hook",
-      "voiceText": "Apple vừa ra mắt iPhone 17 với camera hai trăm megapixel.",
-      "visual": {
-        "background": { "type": "image", "src": "$source.image", "kenBurns": "zoom-in" },
-        "overlay":    { "darkness": 0.4 },
-        "text": {
-          "position": "center", "style": "hook-large",
-          "lines": [
-            { "content": "iPhone 17",     "emphasis": "primary", "animation": "scale-pop" },
-            { "content": "Camera 200MP!", "emphasis": "accent",  "animation": "slide-up-bounce" }
-          ]
-        },
-        "effects": ["flash-white-3f", "particle-burst"]
-      }
-    }
-    /* ... 3 body scenes + outro ... */
-  ]
-}
-```
-
-### Example 2: .txt file with no image (local)
-
-User: `/create-news-video news/agi-update.txt`
-
-Generated `script.json` (excerpt):
-```json
-{
-  "metadata": {
-    "title": "OpenAI công bố mô hình mới với khả năng lập luận",
-    "source": { "url": "local", "domain": "local", "image": null },
-    "channel": "Công nghệ 24h"
-  },
-  "scenes": [
-    {
-      "id": "hook", "type": "hook",
-      "voiceText": "OpenAI vừa công bố mô hình mới có khả năng lập luận như con người.",
-      "visual": {
-        "background": { "type": "gradient", "preset": "news-dark" },
-        "text": {
-          "position": "center", "style": "hook-large",
-          "lines": [
-            { "content": "Mô hình mới", "emphasis": "primary", "animation": "scale-pop" },
-            { "content": "Lập luận!",  "emphasis": "accent",  "animation": "slide-up-bounce" }
-          ]
-        },
-        "effects": ["flash-white-3f"]
-      }
-    }
-    /* ... outro line 3 = "Nguồn: local" ... */
-  ]
-}
-```
-Note: when source has no image, every scene uses `background.type = "gradient"` (no image fallback at composer level needed).
-
-## Sound Effects (SFX)
-
-**You almost never need to set the `sfx` field.** The pipeline has a smart 3-tier selector that picks the right SFX for each scene automatically:
-
-1. **If `scene.sfx` is set** → use exactly that (override).
-2. **Else, scan `voiceText` for semantic keywords**:
-   - `cảnh báo / rủi ro / nguy hiểm / warning` → `alert/`
-   - `kỷ lục / vượt / xuất sắc / breakthrough / success` → `success/`
-   - `thất bại / sai / lỗi / fail / wrong` → `fail/`
-   - `ra mắt / công bố / lần đầu / launch / unveil` → `reveal/`
-   - `đếm ngược / tích tắc / countdown` → `countdown/`
-   - `hùng vĩ / hoành tráng / cinematic / epic` → `cinematic/`
-   - `hồi hộp / chờ đợi / drumroll / suspense` → `drumroll/`
-3. **Else, fall back to template default category**:
-   - `hook` → `transition/` or `cinematic/`
-   - `comparison` → `transition/` or `emphasis/`
-   - `stat-hero` → `emphasis/` or `success/`
-   - `feature-list` → `transition/` or `emphasis/`
-   - `callout` → `alert/` or `drumroll/`
-   - `outro` → `outro/` or `success/`
-
-Within a category, the actual file is picked **deterministically** by hashing the scene id — same script gives same SFX (idempotent), but different scenes in the same video get different files (variety).
-
-**This means:** in 95% of cases you should OMIT the `sfx` field entirely. Just write good Vietnamese voiceText with natural keywords (warning, breakthrough, launch, etc.) and the pipeline will pick the right sound.
-
-### When to add explicit `sfx` override
-
-Only when you want to FORCE a specific sound that the keyword matcher won't infer:
-- Scene needs a particular signature sound (e.g., always a gong on important scenes)
-- Disable SFX for a particular scene: `"sfx": { "name": "none" }`
-- Use a specific file: `"sfx": { "name": "transition/whoosh-sfx", "volume": 0.4 }`
-
-Example (rarely needed):
-```json
-{
-  "id": "body-3",
-  "voiceText": "...",
-  "templateData": { ... },
-  "sfx": { "name": "drumroll/snare-roll", "volume": 0.5, "startOffsetSec": 0.2 }
-}
-```
-
-The pipeline auto-mixes a sound effect at each scene start based on the template type:
-
-| Template | Default SFX | Sound character |
-|---|---|---|
-| `hook` | `transition/whoosh-soft` | Dramatic entrance |
-| `comparison` | `transition/swoosh` | Side-by-side reveal |
-| `stat-hero` | `emphasis/ding` | Number reveal |
-| `feature-list` | `transition/pop` | Bullet appearance |
-| `callout` | `alert/notification` | Important info |
-| `outro` | `outro/tada` | Ending signature |
-
-**You usually do NOT need to add a `sfx` field** — defaults work for 95% of cases.
-
-**ONLY add an explicit `sfx` override when content STRONGLY suggests a different mood:**
-
-| Content cue (in voiceText) | Override |
-|---|---|
-| "cảnh báo", "rủi ro", "đáng lo", "nguy hiểm" | `{ "name": "alert/notification", "volume": 0.4 }` |
-| "vượt", "kỷ lục", "xuất sắc", "tăng mạnh" (positive stat) | `{ "name": "emphasis/chime", "volume": 0.35 }` |
-| Want to disable SFX for this scene | `{ "name": "none" }` |
-
-Place `sfx` at the same level as `voiceText` and `templateData`:
-
-```json
-{
-  "id": "body-3",
-  "type": "body",
-  "voiceText": "Cảnh báo: AI tự chủ có thể đặt ra rủi ro về an ninh mạng.",
-  "templateData": { "template": "callout", ... },
-  "sfx": { "name": "alert/notification", "volume": 0.4 }
-}
-```
-
-Available SFX categories (any `<name>` subfolder in `assets/sfx/<category>/<name>.mp3`):
-- `transition/` — whoosh, swoosh, swish, pop, punch, page-flip, slide, riser
-- `emphasis/` — ding, tick, chime, ping, bong, pop, punch
-- `alert/` — notification, alert, alarm, warning
-- `success/` — applepay, achievement, win, xbox, steam, jet-set
-- `fail/` — wrong-answer-buzzer, incorrect, error, dank-meme
-- `outro/` — tada, win31, noooo
-- `reveal/` — magic-fairy, anime-girl, hey-female-voice
-- `drumroll/` — snare, drum-roll, boom
-- `countdown/` — beep, timer
-- `cinematic/` — rise, impact
-
-Browse `assets/sfx/<category>/` to see exact filenames. Reference WITHOUT the `.mp3` extension. Example:
-```json
-{ "sfx": { "name": "success/xbox-360-achievement-sound", "volume": 0.4 } }
-```
-
-## Edge cases
-
-| Situation | Action |
-|---|---|
-| URL paywall / JS-rendered → WebFetch returns no content | Tell user: "Không đọc được URL (có thể do paywall hoặc JS). Hãy lưu nội dung vào file .txt rồi gọi lại." Stop. |
-| URL content < 200 words | Warn "Tin gốc ngắn, video có thể không đủ chất liệu", continue anyway |
-| URL content > 2000 words | Summarize to key points, fit ~150-200 words script |
-| File mode + file empty/missing | Error message, don't create output dir |
-| Pipeline fails | Report error message + output dir path; user can re-try `npm run pipeline -- <path>` after fixing |
+1. Hook: the surprising promise or problem.
+2. Context: why this matters now.
+3. Process: how it works.
+4. Visual proof: screenshots, product, dashboard, or artifact.
+5. Limitation or tradeoff: keeps the video credible.
+6. Payoff: what the viewer can do with it.
+7. Outro: follow/CTA.

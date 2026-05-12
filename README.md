@@ -157,6 +157,20 @@ Either way, after ~3–5 minutes you'll have `output/<slug>/video.mp4` — a 108
 <sub>Exports <code>script.txt</code> + <code>voice.mp3</code> + <code>sns_post.txt</code> for auto-caption + social caption</sub>
 </td>
 </tr>
+<tr>
+<td width="33%" align="center">
+<h3>🌿 YokDon Brand Prompts</h3>
+<sub>Expands short <code>assetPrompt</code> fields into 9:16 cinematic prompts using the YokDon visual guideline</sub>
+</td>
+<td width="33%" align="center">
+<h3>🖼️ Image-Ready Scenes</h3>
+<sub>Exports <code>brand-asset-prompts.json</code> so custom scene images can be generated and re-rendered cleanly</sub>
+</td>
+<td width="33%" align="center">
+<h3>📘 Beginner Workflow</h3>
+<sub>See <code>docs/yokdon-video-workflow.md</code> for the agreed natural-language workflow</sub>
+</td>
+</tr>
 </table>
 
 ---
@@ -361,6 +375,7 @@ output/<slug>-<timestamp>/
 ├── script.json                # Input JSON (Claude-generated or hand-written)
 ├── script.txt                 # Plain text for CapCut auto-caption
 ├── sns_post.txt               # Vietnamese caption for TikTok / Reels (skill-generated)
+├── brand-asset-prompts.json   # YokDon brand-consistent image prompts per scene
 ├── images/bg.jpg              # og:image (if URL had one)
 ├── voice/
 │   ├── scene-hook.mp3         # TTS per scene (idempotent — skipped if exists)
@@ -386,6 +401,8 @@ output/<slug>-<timestamp>/
 ## 🎨 Visual System
 
 Every video has a **persistent shell** throughout (header brand icon + channel + tag, footer TikTok handle, grain texture, gradient background) plus 4–18 scenes auto-picked by Claude. The base palette is **cream editorial (light)** for consistent brand identity; the `theme` field on `script.metadata` switches the accent colour:
+
+For YokDon workflows, the repo also includes `brands/yokdon/visual_guideline.md` and `brands/yokdon/prompt_template.json`. During pipeline setup, every scene with an `assetPrompt` is expanded into a full 9:16 cinematic image prompt and written to `brand-asset-prompts.json`.
 
 | Theme | When to use |
 |---|---|
@@ -620,6 +637,7 @@ Tests cover Zod schema validation (12 templates), TTS clients for both LucyLab +
 - [x] ~~Auto thumbnail generation (cover image)~~ — shipped via Gemini 2.5 Flash Image
 - [x] ~~Voice-text sync per element~~ — shipped via `voiceChunks`
 - [x] ~~Quality gates before render~~ — shipped via hyperframes lint/validate/inspect
+- [x] ~~Brand-consistent scene image prompts~~ — shipped via YokDon Brand Image System
 - [ ] Burned-in captions (forced alignment with Whisper)
 - [ ] Auto-select background music by mood
 - [ ] Multi-news compilation mode (`digest`)

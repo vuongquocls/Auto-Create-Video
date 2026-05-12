@@ -31,14 +31,14 @@ describe("composeHtml", () => {
     expect(html).toContain('class="scene clip"');       // clip class required for hyperframes visibility
     expect(html).toContain('window.__timelines');       // timeline registry (inlined JS)
 
-    // ── Persistent brand shell ────────────────────────────────
-    expect(html).toContain('class="brand-shell-header"');
+    // ── Persistent minimal watermark shell ────────────────────
+    expect(html).not.toContain('class="brand-shell-header"');
     expect(html).toContain('class="brand-shell-handle"');
-    expect(html).toContain('class="brand-shell-keyword"');
+    expect(html).not.toContain('class="brand-shell-keyword"');
     expect(html).toContain('id="grain-overlay"');
     // Shell has no data-start (persistent)
-    expect(html).toContain('class="brand-name"');
-    expect(html).toContain("Công nghệ 24h");
+    expect(html).not.toContain('class="brand-name"');
+    expect(html).toContain("@quocyokdon");
 
     // ── Hook scene ─────────────────────────────────────────────
     expect(html).toContain('data-layout="hook"');
@@ -72,7 +72,9 @@ describe("composeHtml", () => {
     expect(html).toContain('data-layout="outro"');
     expect(html).toContain('class="out-channel"');
     expect(html).toContain('class="out-underline"');
-    expect(html).toContain('class="out-source"');
+    expect(html).not.toContain('class="out-source"');
+    expect(html).not.toContain('id="tt-card"');
+    expect(html).not.toContain('Following');
     expect(html).toContain("Theo dõi ngay");            // ctaTop content
     expect(html).toContain('class="out-cta-top"');
 
@@ -97,5 +99,37 @@ describe("composeHtml", () => {
     // Hook scene with bgSrc but no bgImageRelPath → gradient fallback
     expect(html).toContain('class="bg gradient-news-dark"');
     expect(html).not.toContain("background-image: url");
+  });
+
+  it("renders storyboard v3 scene layouts and creative metadata", () => {
+    const script = JSON.parse(readFileSync("tests/fixtures/sample-script-storyboard-v3.json", "utf8")) as Script;
+    script.scenes[1].asset = {
+      provider: "local",
+      prompt: "scene-specific generated asset",
+      image: "assets/scenes/body-1.svg",
+      status: "ready",
+    };
+    const sceneAudio = script.scenes.map((s) => ({ id: s.id, durationSec: 6 }));
+    const html = composeHtml({
+      script,
+      sceneAudio,
+      gapSec: 0.3,
+      bgImageRelPath: "images/bg.jpg",
+      audioRelPath: "voice.mp3",
+    });
+
+    expect(html).toContain('data-layout="steps"');
+    expect(html).toContain('class="layout-steps"');
+    expect(html).toContain('data-layout="image-card"');
+    expect(html).toContain('class="image-card-media"');
+    expect(html).toContain('data-layout="quote"');
+    expect(html).toContain('class="quote-text"');
+    expect(html).toContain('data-layout="timeline"');
+    expect(html).toContain('class="timeline-item timeline-item-0"');
+    expect(html).toContain('class="scene-caption"');
+    expect(html).toContain('data-accent="amber"');
+    expect(html).toContain('data-tone="breaking"');
+    expect(html).toContain('class="scene-atmosphere bg-split motion-pull-out"');
+    expect(html).toContain("background-image: url('assets/scenes/body-1.svg')");
   });
 });

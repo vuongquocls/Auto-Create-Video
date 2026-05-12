@@ -44,6 +44,34 @@ const CalloutData = z.object({
   tag: z.string().max(20).optional(),
 });
 
+const ImageCardData = z.object({
+  template: z.literal("image-card"),
+  kicker: z.string().min(1).max(24).optional(),
+  title: z.string().min(1).max(48),
+  detail: z.string().min(1).max(70).optional(),
+});
+
+const QuoteData = z.object({
+  template: z.literal("quote"),
+  quote: z.string().min(1).max(120),
+  attribution: z.string().min(1).max(40).optional(),
+});
+
+const StepsData = z.object({
+  template: z.literal("steps"),
+  title: z.string().min(1).max(42),
+  steps: z.array(z.string().min(1).max(46)).min(2).max(4),
+});
+
+const TimelineData = z.object({
+  template: z.literal("timeline"),
+  title: z.string().min(1).max(42),
+  items: z.array(z.object({
+    label: z.string().min(1).max(24),
+    value: z.string().min(1).max(44),
+  })).min(2).max(4),
+});
+
 const OutroData = z.object({
   template: z.literal("outro"),
   ctaTop: z.string().min(1).max(30),
@@ -57,6 +85,10 @@ export const TemplateData = z.discriminatedUnion("template", [
   StatHeroData,
   FeatureListData,
   CalloutData,
+  ImageCardData,
+  QuoteData,
+  StepsData,
+  TimelineData,
   OutroData,
 ]);
 
@@ -88,6 +120,30 @@ const Scene = z.object({
   type: z.enum(["hook", "body", "outro"]),
   voiceText: z.string().min(1),
   templateData: TemplateData,
+  caption: z.object({
+    headline: z.string().min(1).max(44),
+    subline: z.string().min(1).max(72).optional(),
+    badge: z.string().min(1).max(24).optional(),
+  }).optional(),
+  creative: z.object({
+    tone: z.enum(["studio", "editorial", "breaking", "social", "cinematic", "minimal"]).default("studio"),
+    accent: z.enum(["cyan", "purple", "amber", "rose", "lime", "blue"]).default("cyan"),
+    background: z.enum(["source-image", "abstract", "gradient", "split", "none"]).default("abstract"),
+    motion: z.enum(["push-in", "pull-out", "pan-left", "pan-right", "snap", "float"]).default("push-in"),
+    density: z.enum(["calm", "balanced", "high-energy"]).default("balanced"),
+  }).optional(),
+  asset: z.object({
+    provider: z.enum(["local", "openai", "stock", "manual"]).default("local"),
+    prompt: z.string().min(1).max(2000),
+    image: z.string().min(1).optional(),
+    status: z.enum(["pending", "ready", "failed"]).default("pending"),
+    brand: z.object({
+      profile: z.string().min(1),
+      vibe: z.string().min(1),
+      aspectRatio: z.enum(["9:16", "1:1", "16:9"]).default("9:16"),
+    }).optional(),
+  }).optional(),
+  assetPrompt: z.string().min(1).max(280).optional(),
   /** Optional sound effect override (else pipeline picks per template) */
   sfx: SfxSpec.optional(),
 });

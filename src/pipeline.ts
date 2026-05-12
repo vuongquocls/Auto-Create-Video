@@ -12,6 +12,7 @@ import { existsSync } from "node:fs";
 import { composeHtml } from "./render/html-composer.js";
 import { renderWithHyperframes } from "./render/hyperframes-runner.js";
 import { log } from "./utils/logger.js";
+import { createBrandAssetManifest, enrichScriptWithBrandAssets } from "./brand/brand-assets.js";
 
 const TOTAL_STEPS = 8;
 const DURATION_MIN_SEC = 48;
@@ -52,12 +53,16 @@ export async function runPipeline(scriptPath: string): Promise<void> {
   if (raw.voice?.voiceId === "${VIETNAMESE_VOICEID}" || raw.voice?.voiceId === "${VOICE_ID}") {
     raw.voice.voiceId = cfg.ttsProvider === "lucylab" ? cfg.lucylabVoiceId! : cfg.elevenlabsVoiceId!;
   }
-  const script: Script = ScriptSchema.parse(raw);
+  const script: Script = enrichScriptWithBrandAssets(ScriptSchema.parse(raw));
 
   // STEP 2
   log.step(2, TOTAL_STEPS, "Write script.txt for CapCut");
   const fullText = script.scenes.map((s) => s.voiceText).join("\n\n");
   await writeFile(join(outputDir, "script.txt"), fullText);
+  await writeFile(
+    join(outputDir, "brand-asset-prompts.json"),
+    JSON.stringify(createBrandAssetManifest(script), null, 2),
+  );
 
   // STEP 3 + 4 in parallel
   log.step(3, TOTAL_STEPS, "Fetch og:image (parallel) + Step 4 TTS");

@@ -42,9 +42,20 @@ window.__timelines["news-video"] = tl;
       animateFeatureList(scene, tl, start);
     } else if (layout === "callout") {
       animateCallout(scene, tl, start);
+    } else if (layout === "image-card") {
+      animateImageCard(scene, tl, start);
+    } else if (layout === "quote") {
+      animateQuote(scene, tl, start);
+    } else if (layout === "steps") {
+      animateSteps(scene, tl, start);
+    } else if (layout === "timeline") {
+      animateTimeline(scene, tl, start);
     } else if (layout === "outro") {
       animateOutro(scene, tl, start, dur);
     }
+
+    animateAtmosphere(scene, tl, start, dur);
+    animateCaption(scene, tl, start);
   });
 
   // ── HOOK ──────────────────────────────────────────────────────────────
@@ -133,6 +144,113 @@ window.__timelines["news-video"] = tl;
     }
   }
 
+  // ── IMAGE CARD ────────────────────────────────────────────────────────
+  function animateImageCard(scene, tl, start) {
+    const media = scene.querySelector(".image-card-media");
+    if (media) {
+      tl.fromTo(media, { x: -70, scale: 0.94, opacity: 0 }, { x: 0, scale: 1, opacity: 1, duration: 0.6 }, start + 0.12);
+      tl.to(media, { scale: 1.04, duration: 4.5 }, start + 0.78);
+    }
+
+    const kicker = scene.querySelector(".image-card-kicker");
+    if (kicker) {
+      tl.fromTo(kicker, { x: 30, opacity: 0 }, { x: 0, opacity: 1, duration: 0.35 }, start + 0.28);
+    }
+
+    const title = scene.querySelector(".image-card-title");
+    if (title) {
+      tl.fromTo(title, { y: 52, opacity: 0 }, { y: 0, opacity: 1, duration: 0.55 }, start + 0.42);
+    }
+
+    const detail = scene.querySelector(".image-card-detail");
+    if (detail) {
+      tl.fromTo(detail, { y: 32, opacity: 0 }, { y: 0, opacity: 1, duration: 0.42 }, start + 0.78);
+    }
+  }
+
+  // ── QUOTE ─────────────────────────────────────────────────────────────
+  function animateQuote(scene, tl, start) {
+    const mark = scene.querySelector(".quote-mark");
+    if (mark) {
+      tl.fromTo(mark, { y: 45, opacity: 0 }, { y: 0, opacity: 1, duration: 0.45 }, start + 0.15);
+    }
+
+    const text = scene.querySelector(".quote-text");
+    if (text) {
+      tl.fromTo(text, { y: 50, opacity: 0 }, { y: 0, opacity: 1, duration: 0.62 }, start + 0.32);
+    }
+
+    const attr = scene.querySelector(".quote-attr");
+    if (attr) {
+      tl.fromTo(attr, { x: -24, opacity: 0 }, { x: 0, opacity: 1, duration: 0.42 }, start + 0.9);
+    }
+  }
+
+  // ── STEPS ─────────────────────────────────────────────────────────────
+  function animateSteps(scene, tl, start) {
+    const title = scene.querySelector(".steps-title");
+    if (title) {
+      tl.fromTo(title, { y: 38, opacity: 0 }, { y: 0, opacity: 1, duration: 0.48 }, start + 0.12);
+    }
+
+    const rows = scene.querySelectorAll(".step-row");
+    rows.forEach((row, i) => {
+      tl.fromTo(row, { x: i % 2 === 0 ? -46 : 46, opacity: 0 }, { x: 0, opacity: 1, duration: 0.42 }, start + 0.45 + i * 0.17);
+    });
+  }
+
+  // ── TIMELINE ──────────────────────────────────────────────────────────
+  function animateTimeline(scene, tl, start) {
+    const title = scene.querySelector(".timeline-title");
+    if (title) {
+      tl.fromTo(title, { y: 36, opacity: 0 }, { y: 0, opacity: 1, duration: 0.48 }, start + 0.12);
+    }
+
+    const track = scene.querySelector(".timeline-track");
+    if (track) {
+      tl.fromTo(track, { height: 0, opacity: 1 }, { height: 520, opacity: 1, duration: 0.85 }, start + 0.4);
+    }
+
+    const items = scene.querySelectorAll(".timeline-item");
+    items.forEach((item, i) => {
+      tl.fromTo(item, { x: 42, opacity: 0 }, { x: 0, opacity: 1, duration: 0.42 }, start + 0.52 + i * 0.18);
+    });
+  }
+
+  // ── SHARED ATMOSPHERE + CAPTION ───────────────────────────────────────
+  function animateAtmosphere(scene, tl, start, dur) {
+    const sweep = scene.querySelector(".scene-sweep");
+    if (sweep) {
+      tl.fromTo(sweep, { x: 0, opacity: 0.15 }, { x: 1450, opacity: 0.55, duration: Math.max(1.8, dur - 0.2) }, start + 0.05);
+    }
+
+    const grid = scene.querySelector(".scene-grid");
+    if (grid) {
+      tl.fromTo(grid, { y: 0, opacity: 0.18 }, { y: -80, opacity: 0.36, duration: Math.max(1.8, dur - 0.2) }, start + 0.05);
+    }
+
+    const photo = scene.querySelector(".scene-photo");
+    if (photo) {
+      const motion = scene.querySelector(".scene-atmosphere")?.className || "";
+      const fromX = motion.includes("pan-left") ? 40 : motion.includes("pan-right") ? -40 : 0;
+      const toX = motion.includes("pan-left") ? -40 : motion.includes("pan-right") ? 40 : 0;
+      const fromScale = motion.includes("pull-out") ? 1.14 : 1.02;
+      const toScale = motion.includes("pull-out") ? 1.02 : 1.12;
+      tl.fromTo(photo, { x: fromX, scale: fromScale, opacity: 0.0 }, { x: toX, scale: toScale, opacity: 0.28, duration: Math.max(1.8, dur - 0.3) }, start + 0.08);
+    }
+  }
+
+  function animateCaption(scene, tl, start) {
+    const caption = scene.querySelector(".scene-caption");
+    if (!caption) return;
+    tl.fromTo(caption, { y: 34, opacity: 0 }, { y: 0, opacity: 1, duration: 0.45 }, start + 0.95);
+
+    const badge = caption.querySelector(".caption-badge");
+    if (badge) {
+      tl.fromTo(badge, { scale: 0.9, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.28 }, start + 1.02);
+    }
+  }
+
   // ── OUTRO ─────────────────────────────────────────────────────────────
   function animateOutro(scene, tl, start, dur) {
     const cta = scene.querySelector(".out-cta-top");
@@ -150,49 +268,5 @@ window.__timelines["news-video"] = tl;
       tl.fromTo(underline, { width: 0 }, { width: "600px", duration: 0.5 }, start + 0.9);
     }
 
-    const source = scene.querySelector(".out-source");
-    if (source) {
-      tl.fromTo(source, { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: 0.4 }, start + 1.3);
-    }
-
-    // ── TikTok follow card animation (last ~3.5s of outro) ──────────────
-    // Adapted from HyperFrames `tiktok-follow` block.
-    // Card lives inside the outro scene (id="tt-card"); slide up + button click sequence.
-    const ttCard = scene.querySelector("#tt-card");
-    if (ttCard) {
-      const ttBtn      = scene.querySelector("#tt-follow-btn");
-      const ttFollow   = scene.querySelector("#tt-btn-follow");
-      const ttFollwing = scene.querySelector("#tt-btn-following");
-      const ttBase     = start + 1.6;  // start TikTok sequence 1.6s into outro
-
-      // Slide in from bottom + fade in
-      tl.fromTo(ttCard,
-        { opacity: 0, y: 300 },
-        { opacity: 1, y: 0, duration: 0.5 },
-        ttBase
-      );
-
-      // Button press (scale down)
-      if (ttBtn) {
-        tl.to(ttBtn, { scale: 0.92, duration: 0.15 }, ttBase + 0.9);
-        // Release with slight bounce (use scale up)
-        tl.to(ttBtn, { scale: 1, duration: 0.4 }, ttBase + 1.05);
-      }
-
-      // Swap "Follow" → "Following" (opacity)
-      if (ttFollow) {
-        tl.to(ttFollow, { opacity: 0, duration: 0.08 }, ttBase + 1.05);
-      }
-      if (ttFollwing) {
-        tl.to(ttFollwing, { opacity: 1, duration: 0.08 }, ttBase + 1.08);
-      }
-
-      // Hold + subtle zoom-in to focus viewer attention on the card.
-      // Slow zoom from scale 1 → 1.08 over the remaining outro duration.
-      const holdStart = ttBase + 1.3;             // after click animation
-      const holdEnd   = start + dur - 0.1;        // ends just before scene ends
-      const holdLen   = Math.max(0.5, holdEnd - holdStart);
-      tl.to(ttCard, { scale: 1.08, duration: holdLen }, holdStart);
-    }
   }
 })();

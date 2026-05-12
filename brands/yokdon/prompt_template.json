@@ -1,0 +1,22 @@
+{
+  "profile": "yokdon-intimate-wilderness",
+  "name": "Yok Don — Intimate Wilderness",
+  "aspectRatio": "9:16",
+  "fixedStyle": {
+    "vibe": "Intimate documentary wilderness: close to nature, quiet, observant, grounded, never glossy or touristy.",
+    "quality": "photorealistic cinematic documentary frame, natural skin tones, highly detailed, editorial realism",
+    "palette": "Earth & Muted: dry ochre, muted moss green, warm soil brown, soft golden highlights, slightly cool deep shadows",
+    "lighting": "Natural low-key golden hour lighting, motivated sunlight through forest canopy, soft rim light, gentle contrast",
+    "composition": "off-center rule of thirds, layered foreground branches or tree trunks, clear subject silhouette, strong depth, safe center crop for Shorts/Reels",
+    "lens": "35mm documentary lens, f/1.8 to f/2.8, medium shallow depth of field, natural bokeh",
+    "textures": "rough dipterocarp bark, dry leaves, cracked earth, river reflections, ranger fabric, dust, weathered surfaces",
+    "negativePrompt": "No text, captions, watermark, logo, UI, extra fingers, distorted faces, plastic skin, over-saturated colors, fantasy armor, tourist postcard look"
+  },
+  "sceneFields": {
+    "sceneId": "[SCENE_ID]",
+    "sceneType": "[hook/body/outro]",
+    "mainVisual": "[SPECIFIC SUBJECT, ACTION, PLACE]",
+    "captionContext": "[SHORT CAPTION CONTEXT]",
+    "motionPotential": "[push-in/pull-out/pan-left/pan-right/float/snap]"
+  }
+}

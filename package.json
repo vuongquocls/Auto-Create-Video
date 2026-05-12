@@ -12,6 +12,7 @@
     "test:watch": "vitest",
     "pipeline": "tsx src/cli.ts",
     "rerender": "tsx rerender.ts",
+    "studio": "tsx src/studio/server.ts",
     "typecheck": "tsc --noEmit",
     "build": "tsc",
     "sfx:download": "tsx scripts/download-sfx.ts",
