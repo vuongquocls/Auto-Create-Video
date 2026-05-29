@@ -33,8 +33,8 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 export class LucylabClient implements TtsClient {
   constructor(private cfg: LucylabOpts) {}
 
-  async generate(text: string, audioOutPath: string, srtOutPath?: string): Promise<void> {
-    const projectExportId = await this.submitWithRetry(text);
+  async generate(text: string, audioOutPath: string, srtOutPath?: string, speed = 1): Promise<void> {
+    const projectExportId = await this.submitWithRetry(text, speed);
     const { url, srtUrl } = await this.pollUntilDone(projectExportId);
     await this.download(url, audioOutPath);
     if (srtOutPath && srtUrl) {
@@ -61,14 +61,14 @@ export class LucylabClient implements TtsClient {
     return body.result;
   }
 
-  private async submitWithRetry(text: string): Promise<string> {
+  private async submitWithRetry(text: string, speed: number): Promise<string> {
     const delays = [1000, 2000, 4000];
     let lastErr: unknown;
     for (let attempt = 0; attempt < 4; attempt++) {
       try {
         const result = await this.rpc<TtsLongTextResult>(
           "ttsLongText",
-          { text, userVoiceId: this.cfg.voiceId, speed: 1 },
+          { text, userVoiceId: this.cfg.voiceId, speed },
           `submit-${Date.now()}`,
         );
         return result.projectExportId;

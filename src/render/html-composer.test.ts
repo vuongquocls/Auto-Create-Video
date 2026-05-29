@@ -132,4 +132,45 @@ describe("composeHtml", () => {
     expect(html).toContain('class="scene-atmosphere bg-split motion-pull-out"');
     expect(html).toContain("background-image: url('assets/scenes/body-1.svg')");
   });
+
+  it("renders social news card scenes with local image motion", () => {
+    const script = JSON.parse(readFileSync("tests/fixtures/sample-script-storyboard-v3.json", "utf8")) as Script;
+    script.scenes[1].templateData = {
+      template: "social-news-card",
+      source: "VƯỜN QUỐC GIA YOK ĐÔN",
+      headline: "CẢNH BÁO BẢO VỆ BÒ RỪNG",
+      body: "Mọi hành vi săn bắt, đặt bẫy, vận chuyển trái phép đều có thể bị xử lý nghiêm.",
+      footer: "CẢNH BÁO PHÁP LUẬT",
+      panel: "red",
+      headlineStyle: "yellow-outline",
+    };
+    script.scenes[1].creative = {
+      tone: "breaking",
+      accent: "rose",
+      background: "source-image",
+      motion: "urgent-pulse",
+      density: "high-energy",
+      stylePreset: "legal-warning",
+    };
+    script.scenes[1].asset = {
+      provider: "local",
+      prompt: "wild cattle camera trap",
+      image: "assets/scenes/body-1.svg",
+      status: "ready",
+    };
+    const sceneAudio = script.scenes.map((s) => ({ id: s.id, durationSec: 6 }));
+    const html = composeHtml({
+      script,
+      sceneAudio,
+      gapSec: 0.3,
+      bgImageRelPath: "images/bg.jpg",
+      audioRelPath: "voice.mp3",
+    });
+
+    expect(html).toContain('data-layout="social-news-card"');
+    expect(html).toContain('data-motion="urgent-pulse"');
+    expect(html).toContain('class="layout-social-news-card panel-red headline-yellow-outline"');
+    expect(html).toContain("background-image: url('assets/scenes/body-1.svg')");
+    expect(html).toContain("CẢNH BÁO BẢO VỆ BÒ RỪNG");
+  });
 });

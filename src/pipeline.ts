@@ -13,18 +13,14 @@ import { composeHtml } from "./render/html-composer.js";
 import { renderWithHyperframes } from "./render/hyperframes-runner.js";
 import { log } from "./utils/logger.js";
 import { createBrandAssetManifest, enrichScriptWithBrandAssets } from "./brand/brand-assets.js";
+import { allSceneAssetsReady, prepareSceneAssets, summarizeSceneAssets, type AssetProvider } from "./studio/assets.js";
+import { prepareTextForTts, ttsCacheKey } from "./tts/voice-text.js";
+import { buildSocialCaption } from "./publish/caption.js";
 
 const TOTAL_STEPS = 8;
 const DURATION_MIN_SEC = 48;
 const DURATION_MAX_SEC = 72;
 const SCENE_GAP_SEC = 0.3;
-/**
- * Extra seconds added to the outro scene visual duration AFTER the voice ends.
- * Gives the TikTok follow card time to be read by the viewer (otherwise the
- * video ends a few hundred ms after the card slides up + click animation).
- * Audio stays silent during this hold; visual stays on screen.
- */
-const OUTRO_HOLD_SEC = 3;
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const TPL_DIR = join(__dirname, "render", "templates");
@@ -41,7 +37,13 @@ const HYPERFRAMES_CONFIG = {
   },
 };
 
-export async function runPipeline(scriptPath: string): Promise<void> {
+export interface PipelineOptions {
+  assetsApproved?: boolean;
+  prepareAssetsOnly?: boolean;
+  assetProvider?: AssetProvider;
+}
+
+export async function runPipeline(scriptPath: string, options: PipelineOptions = {}): Promise<void> {
   const cfg = loadConfig();
   const outputDir = dirname(scriptPath);
   log.info(`Output directory: ${outputDir}`);
@@ -51,14 +53,23 @@ export async function runPipeline(scriptPath: string): Promise<void> {
   const raw = JSON.parse(await readFile(scriptPath, "utf8"));
   // Substitute env placeholder before validation (works for both providers)
   if (raw.voice?.voiceId === "${VIETNAMESE_VOICEID}" || raw.voice?.voiceId === "${VOICE_ID}") {
-    raw.voice.voiceId = cfg.ttsProvider === "lucylab" ? cfg.lucylabVoiceId! : cfg.elevenlabsVoiceId!;
+    raw.voice.voiceId = cfg.ttsProvider === "lucylab"
+      ? cfg.lucylabVoiceId!
+      : cfg.ttsProvider === "elevenlabs"
+        ? cfg.elevenlabsVoiceId!
+        : cfg.supertonicVoice;
   }
   const script: Script = enrichScriptWithBrandAssets(ScriptSchema.parse(raw));
 
+  if (await stopForAssetReviewIfNeeded(scriptPath, outputDir, script, options)) {
+    return;
+  }
+
   // STEP 2
-  log.step(2, TOTAL_STEPS, "Write script.txt for CapCut");
-  const fullText = script.scenes.map((s) => s.voiceText).join("\n\n");
+  log.step(2, TOTAL_STEPS, "Write script.txt + sns_post.txt");
+  const fullText = script.scenes.map((s) => prepareTextForTts(s.voiceText)).join("\n\n");
   await writeFile(join(outputDir, "script.txt"), fullText);
+  await writeFile(join(outputDir, "sns_post.txt"), buildSocialCaption(script));
   await writeFile(
     join(outputDir, "brand-asset-prompts.json"),
     JSON.stringify(createBrandAssetManifest(script), null, 2),
@@ -81,19 +92,38 @@ export async function runPipeline(scriptPath: string): Promise<void> {
     limit(async () => {
       const out = join(voiceDir, `scene-${scene.id}.mp3`);
       const srtOut = join(voiceDir, `scene-${scene.id}.srt`);
+      const ttsText = prepareTextForTts(scene.voiceText);
+      const metaOut = join(voiceDir, `scene-${scene.id}.tts.json`);
+      const cacheKey = ttsCacheKey({
+        provider: script.voice.provider,
+        voiceId: script.voice.voiceId,
+        speed: script.voice.speed,
+        text: ttsText,
+      });
 
       // IDEMPOTENT: skip TTS if voice file already exists.
-      // To force re-TTS for a scene, delete its mp3 file before running.
-      // This saves API quota when only some scenes' voiceText changed.
+      // The metadata hash includes the TTS-safe text, voice, provider, and speed.
+      // That prevents stale audio when we normalize phone numbers or edit a scene.
       if (existsSync(out)) {
-        const dur = await getDurationSec(out);
-        log.info(`  scene ${scene.id}: REUSE existing mp3 (${dur.toFixed(2)}s) — delete to force re-TTS`);
-        return { id: scene.id, path: out, durationSec: dur };
+        const meta = await readJsonIfExists(metaOut);
+        if (meta?.cacheKey === cacheKey) {
+          const dur = await getDurationSec(out);
+          log.info(`  scene ${scene.id}: REUSE existing mp3 (${dur.toFixed(2)}s)`);
+          return { id: scene.id, path: out, durationSec: dur };
+        }
+        log.info(`  scene ${scene.id}: existing mp3 is stale or missing metadata → re-TTS`);
       }
 
-      log.info(`  TTS scene ${scene.id} (${scene.voiceText.length} chars)...`);
-      await ttsClient.generate(scene.voiceText, out, srtOut);
+      log.info(`  TTS scene ${scene.id} (${ttsText.length} chars)...`);
+      await ttsClient.generate(ttsText, out, srtOut, script.voice.speed);
       const dur = await getDurationSec(out);
+      await writeFile(metaOut, JSON.stringify({
+        cacheKey,
+        provider: script.voice.provider,
+        voiceId: script.voice.voiceId,
+        speed: script.voice.speed,
+        text: ttsText,
+      }, null, 2));
       log.info(`  scene ${scene.id}: ${dur.toFixed(2)}s`);
       return { id: scene.id, path: out, durationSec: dur };
     }),
@@ -125,11 +155,15 @@ export async function runPipeline(scriptPath: string): Promise<void> {
     cursor += a.durationSec + SCENE_GAP_SEC;
   }
 
-  // Build SFX mix list using smart 3-tier selector
+  // Build SFX mix list. Auto-SFX is opt-in because transition bleeps can sound
+  // like stray audio in legal/public-service videos. Explicit scene.sfx still works.
   const sfxIndex = indexSfxLibrary(SFX_DIR);
   const indexCats = Object.keys(sfxIndex).length;
   const indexFiles = Object.values(sfxIndex).reduce((s, a) => s + a.length, 0);
   log.info(`  SFX library: ${indexFiles} files in ${indexCats} categories`);
+  if (!cfg.autoSfx) {
+    log.info("  Auto SFX disabled (set AUTO_SFX=true to enable template/semantic SFX)");
+  }
 
   const sfxList: SfxMixSpec[] = [];
   for (const scene of script.scenes) {
@@ -151,9 +185,11 @@ export async function runPipeline(scriptPath: string): Promise<void> {
       continue;
     }
 
+    if (!cfg.autoSfx) continue;
+
     // Tier 2/3: smart selection by content + template
     const picked = pickSfxForScene({
-      voiceText: scene.voiceText,
+      voiceText: prepareTextForTts(scene.voiceText),
       templateName: scene.templateData.template,
       sceneId: scene.id,
       index: sfxIndex,
@@ -184,39 +220,12 @@ export async function runPipeline(scriptPath: string): Promise<void> {
   // STEP 6 — Compose HTML + write hyperframes project files
   log.step(6, TOTAL_STEPS, "Compose HTML + project files");
 
-  // Resolve TikTok avatar — download URL if provided, else copy bundled default
-  // Bundled avatar can be jpg/jpeg/png/webp — pick whichever exists
-  const findBundledAvatar = (): string => {
-    const baseDir = join(__dirname, "..", "assets");
-    for (const ext of ["jpg", "jpeg", "png", "webp"]) {
-      const p = join(baseDir, `avatar.${ext}`);
-      if (existsSync(p)) return p;
-    }
-    throw new Error(`No bundled avatar found. Place an image at assets/avatar.{jpg,png,webp}`);
-  };
-  const bundledAvatar = findBundledAvatar();
-  const ttAvatarExt = bundledAvatar.split(".").pop()!.toLowerCase();
-  const ttAvatarFile = `tiktok-avatar.${ttAvatarExt}`;
-  const ttAvatarOut = join(outputDir, ttAvatarFile);
-  if (cfg.tiktok.avatarUrl) {
-    const r = await fetchImage(cfg.tiktok.avatarUrl, ttAvatarOut);
-    if (!r.success) {
-      log.warn(`TikTok avatar download failed: ${r.reason} → falling back to bundled default`);
-      await copyFile(bundledAvatar, ttAvatarOut);
-    }
-  } else {
-    await copyFile(bundledAvatar, ttAvatarOut);
-  }
-
   const html = composeHtml({
     script,
     sceneAudio: sceneAudio.map((a) => ({ id: a.id, durationSec: a.durationSec })),
     gapSec: SCENE_GAP_SEC,
     bgImageRelPath,
     audioRelPath: "voice.mp3",
-    tiktok: cfg.tiktok,
-    tiktokAvatarRelPath: ttAvatarFile,
-    outroHoldSec: OUTRO_HOLD_SEC,
   });
 
   // hyperframes expects: index.html (NOT composition.html), hyperframes.json, meta.json in DIR
@@ -235,6 +244,13 @@ export async function runPipeline(scriptPath: string): Promise<void> {
   await copyFile(join(TPL_DIR, "styles.css"),    join(outputDir, "styles.css"));
   await copyFile(join(TPL_DIR, "animations.js"), join(outputDir, "animations.js"));
 
+  // Copy brand logo into output assets/ so HTML can find it at assets/logo-vuon.png
+  const logoSrc = join(__dirname, "..", "assets", "logo-vuon.png");
+  if (existsSync(logoSrc)) {
+    await mkdir(join(outputDir, "assets"), { recursive: true });
+    await copyFile(logoSrc, join(outputDir, "assets", "logo-vuon.png"));
+  }
+
   // STEP 7
   log.step(7, TOTAL_STEPS, "Render with hyperframes");
   const videoPath = join(outputDir, "video.mp4");
@@ -246,5 +262,69 @@ export async function runPipeline(scriptPath: string): Promise<void> {
   console.log(`Video:  ${videoPath}`);
   console.log(`Audio:  ${voiceMp3}  (cho CapCut)`);
   console.log(`Script: ${join(outputDir, "script.txt")}  (cho CapCut auto-caption)`);
+  console.log(`Post:   ${join(outputDir, "sns_post.txt")}  (caption mang xa hoi)`);
   console.log(`Tong thoi luong: ${totalAudioSec.toFixed(2)}s`);
+}
+
+async function readJsonIfExists(path: string): Promise<any | null> {
+  if (!existsSync(path)) return null;
+  try {
+    return JSON.parse(await readFile(path, "utf8"));
+  } catch {
+    return null;
+  }
+}
+
+async function stopForAssetReviewIfNeeded(
+  scriptPath: string,
+  outputDir: string,
+  script: Script,
+  options: PipelineOptions,
+): Promise<boolean> {
+  if (script.metadata.source.image) return false;
+
+  const ready = allSceneAssetsReady(script);
+  const provider = options.assetProvider || "local";
+  if (!ready) {
+    log.step(2, TOTAL_STEPS, "Prepare scene images for review");
+    const root = join(__dirname, "..");
+    await prepareSceneAssets(outputDir, script, provider, {
+      searchRoots: [join(root, "assets"), join(root, "output")],
+    });
+    await writeFile(scriptPath, JSON.stringify(script, null, 2));
+    await writeAssetReviewFile(outputDir, script, "prepared");
+    printAssetReviewSummary(outputDir, script);
+    console.log("\nĐã chuẩn bị ảnh minh họa và tạm dừng trước bước render.");
+    console.log("Hãy kiểm tra ảnh, bổ sung/thay ảnh nếu cần, rồi xác nhận duyệt ảnh trước khi render.");
+    return true;
+  }
+
+  await writeAssetReviewFile(outputDir, script, "ready");
+  if (options.prepareAssetsOnly || !options.assetsApproved) {
+    printAssetReviewSummary(outputDir, script);
+    console.log("\nẢnh đã sẵn sàng nhưng pipeline chưa nhận xác nhận duyệt ảnh, nên chưa render video.");
+    console.log("Chạy lại qua Studio bằng nút \"Duyệt ảnh, render\" hoặc dùng cờ --approved-assets nếu bạn đã kiểm tra ảnh.");
+    return true;
+  }
+
+  return false;
+}
+
+async function writeAssetReviewFile(outputDir: string, script: Script, state: "prepared" | "ready") {
+  await writeFile(join(outputDir, "asset-review.json"), JSON.stringify({
+    state,
+    directory: "assets/scenes",
+    count: summarizeSceneAssets(script).filter((scene) => scene.status === "ready" && scene.image).length,
+    scenes: summarizeSceneAssets(script),
+  }, null, 2));
+}
+
+function printAssetReviewSummary(outputDir: string, script: Script) {
+  const scenes = summarizeSceneAssets(script);
+  console.log("\n=== Asset Review ===");
+  console.log(`Ảnh: ${scenes.filter((scene) => scene.status === "ready" && scene.image).length}/${scenes.length}`);
+  console.log(`Thư mục: ${join(outputDir, "assets", "scenes")}`);
+  for (const scene of scenes) {
+    console.log(`- ${scene.sceneId}: ${scene.image || "(chưa có ảnh)"} — ${scene.label}`);
+  }
 }

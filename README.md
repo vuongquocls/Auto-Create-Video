@@ -269,7 +269,7 @@ npm test             # 44 tests should pass
 
 ## ⚙️ Configuration
 
-Open `.env.local` and pick **one of two providers**:
+Open `.env.local` and pick **one of three providers**:
 
 ### Option 1 — LucyLab.io (recommended for Vietnamese)
 
@@ -296,6 +296,67 @@ ELEVENLABS_MODEL_ID=eleven_multilingual_v2
 - ⚠️ Pricier than LucyLab, no SRT included
 - 🔗 Get key: https://elevenlabs.io/app/settings/api-keys · Browse voices: https://elevenlabs.io/app/voice-library
 
+### Option 3 — Supertonic local/offline
+
+```env
+TTS_PROVIDER=supertonic
+SUPERTONIC_PYTHON=python3
+SUPERTONIC_SCRIPT=scripts/supertonic_tts.py
+SUPERTONIC_VOICE=M4
+SUPERTONIC_LANG=vi
+SUPERTONIC_SPEED=1.05
+```
+
+Install the local Python package once:
+
+```bash
+python3 -m pip install supertonic
+```
+
+- ✅ No cloud API key, no quota, text stays on your machine
+- ✅ Good for draft renders, private scripts, and emergency fallback
+- ⚠️ No SRT output; use `script.txt` with CapCut auto-caption
+- ⚠️ First run downloads model assets from Hugging Face, so do one warm-up run before a deadline
+
+### Quota fallback mode
+
+When LucyLab or ElevenLabs is your preferred final voice, keep it as `TTS_PROVIDER` and add Supertonic as fallback:
+
+```env
+TTS_PROVIDER=elevenlabs
+ELEVENLABS_API_KEY=sk_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+ELEVENLABS_VOICE_ID=EXAVITQu4vr4xnSDxMaL
+
+TTS_FALLBACK_PROVIDER=supertonic
+SUPERTONIC_VOICE=M4
+SUPERTONIC_LANG=vi
+SUPERTONIC_SPEED=1.05
+```
+
+If the cloud provider returns quota/rate-limit/server errors, the pipeline retries that scene locally with Supertonic and still writes `voice/scene-*.mp3`. You will see a warning in the terminal. For a clean final render later, top up quota, delete the fallback scene files, and re-run:
+
+```bash
+rm output/<slug>/voice/scene-*.mp3
+npm run pipeline -- output/<slug>/script.json
+```
+
+If you are running from Codex and do not want to edit `.env.local`, use the built-in fallback command instead:
+
+```bash
+npm run pipeline:fallback -- output/<slug>/script.json
+```
+
+That command keeps the current `TTS_PROVIDER` from `.env.local` as the primary voice provider and injects these fallback values only for this run:
+
+```env
+TTS_FALLBACK_PROVIDER=supertonic
+SUPERTONIC_PYTHON=.venv-supertonic311/bin/python
+SUPERTONIC_SCRIPT=scripts/supertonic_tts.py
+SUPERTONIC_VOICE=M4
+SUPERTONIC_LANG=vi
+SUPERTONIC_SPEED=1.05
+```
+
 ### TikTok follow card (optional, all defaults work)
 
 ```env
@@ -321,7 +382,8 @@ GEMINI_IMAGE_MODEL=gemini-2.5-flash-image    # default; ~7s per call
 ### Pipeline tuning (optional)
 
 ```env
-TTS_CONCURRENCY=1    # 1 for LucyLab (API limit). Increase for ElevenLabs parallelism.
+TTS_CONCURRENCY=1    # 1 for LucyLab/Supertonic. Increase for ElevenLabs parallelism.
+AUTO_SFX=false       # Default: no automatic transition SFX. Use scene.sfx or set true when desired.
 ```
 
 ---
@@ -358,7 +420,21 @@ If you already have a `script.json` (debugging or hand-written):
 npm run pipeline -- output/<slug>-<timestamp>/script.json
 ```
 
-### Method 3 — Re-render visuals only (saves TTS quota)
+### Method 3 — Local Studio: create and publish
+
+```bash
+npm run studio
+```
+
+Open `http://localhost:8787`, paste content or an idea, review scene images, render the video, then click **Đăng**. Studio defaults to `dry-run`; configure `.env.local` with `AUTO_PUBLISH_PLATFORMS=webhook,facebook,youtube,tiktok` and the required tokens to publish for real.
+
+You can also publish from CLI after `video.mp4` exists:
+
+```bash
+npm run publish -- output/<slug>-<timestamp> --platforms dry-run
+```
+
+### Method 4 — Re-render visuals only (saves TTS quota)
 
 When voice files already exist in `voice/` and you only want to re-render the visuals:
 
@@ -392,6 +468,9 @@ output/<slug>-<timestamp>/
 ├── animations.js              # GSAP timeline (self-contained)
 ├── hyperframes.json           # HyperFrames manifest
 ├── meta.json                  # HyperFrames metadata
+├── publish-manifest.json      # Platform publishing manifest: caption, video hash, metadata
+├── publish-result.json        # Per-platform result after publishing
+├── publish-dry-run.json       # Dry-run plan, no external API call
 ├── thumbnail.png              # Gemini-generated 9:16 cover (if GEMINI_API_KEY set)
 └── video.mp4                  # 🎉 Final output — 1080×1920 @ 30fps + embedded cover
 ```
@@ -465,7 +544,7 @@ For YokDon workflows, the repo also includes `brands/yokdon/visual_guideline.md`
 | `chart-bars` | `emphasis` → `success` | Bar reveal cascade |
 | `kinetic-quote` | `cinematic` → `drumroll` | Typographic reveal |
 
-The 3-tier SFX picker (in [`src/assets/sfx-selector.ts`](src/assets/sfx-selector.ts)) chooses in this order:
+Automatic transition SFX is off by default to avoid stray sounds in legal/public-service videos. When `AUTO_SFX=true`, the 3-tier SFX picker (in [`src/assets/sfx-selector.ts`](src/assets/sfx-selector.ts)) chooses in this order:
 
 1. **Explicit `scene.sfx`** override (`"none"` disables SFX for that scene)
 2. **Semantic match** on `voiceText` keywords (Vietnamese + English) — e.g. `cảnh báo|warning|risk` → `alert`, `kỷ lục|record|breakthrough` → `success`, `ra mắt|launch|reveal` → `reveal`, `thất bại|fail|crash` → `fail`
@@ -511,6 +590,8 @@ Within a category, files are picked **deterministically** by hashing the scene i
 
 Yes. Switch `TTS_PROVIDER=elevenlabs` in `.env.local` — ElevenLabs supports 30+ languages including English, Chinese, Japanese.
 
+For offline/local multilingual drafts, use `TTS_PROVIDER=supertonic` and set `SUPERTONIC_LANG` to one of Supertonic's language codes, for example `vi`, `en`, `ko`, or `ja`.
+
 Note: the Claude Code skill currently optimises script generation for Vietnamese. For other languages you may want to adjust the prompts in `.claude/skills/create-news-video/SKILL.md`.
 </details>
 
@@ -521,6 +602,7 @@ Roughly **$0.05–0.15 per video**, depending on TTS provider:
 
 - LucyLab: ~$0.02 per video (cheapest, Vietnamese only)
 - ElevenLabs: ~$0.10 per video (multilingual)
+- Supertonic: $0 per render after local setup (uses your machine)
 - Claude API (script generation): ~$0.03 per video
 </details>
 
@@ -622,6 +704,8 @@ Tests cover Zod schema validation (12 templates), TTS clients for both LucyLab +
 | Error | Fix |
 |---|---|
 | `Missing VIETNAMESE_API_KEY` / `Missing ELEVENLABS_API_KEY` | Check `.env.local` exists and `TTS_PROVIDER` matches the provider you have keys for |
+| `Missing Python package 'supertonic'` | Run `python3 -m pip install supertonic`, or set `SUPERTONIC_PYTHON` to the Python environment where it is installed |
+| `Supertonic first run is slow` | Expected. It downloads/caches model assets from Hugging Face on first use |
 | `hyperframes render failed` | Run `npx hyperframes render --help` to verify CLI; ensure Chrome can be downloaded by Puppeteer |
 | `LucyLab polling timeout` | Increase `LUCYLAB_POLL_TIMEOUT_MS` in `.env.local` (default 120000ms) |
 | `ElevenLabs 401 Invalid API key` | Verify the key on the ElevenLabs dashboard, re-paste into `.env.local` |

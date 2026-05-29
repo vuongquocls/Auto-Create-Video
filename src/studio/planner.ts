@@ -1,5 +1,6 @@
 import type { Script } from "../render/script-schema.js";
 import { toSlug } from "../utils/slug.js";
+import { directVideo, motionFor } from "./director.js";
 
 export interface CreateProjectInput {
   title?: string;
@@ -32,6 +33,9 @@ export function buildScript(input: CreateProjectInput): Script {
   const keywords = pickKeywords(content);
   const domain = input.domain || domainFromUrl(input.sourceUrl) || "local";
   const channel = input.channel?.trim() || "Quoc YokDon";
+  const direction = directVideo({ title, content, channel, domain });
+  const visualBrief = direction.visualKeywords.join(", ");
+  const useSocialNewsCards = direction.intent !== "editorial-explainer" && direction.intent !== "how-to";
 
   const hookText = sentences[0] || `Có một chủ đề đáng chú ý: ${title}.`;
   const [context, bodyA, bodyB, bodyC] = buildBodySegments(sentences.slice(1), title, keywords);
@@ -49,6 +53,13 @@ export function buildScript(input: CreateProjectInput): Script {
         image: null,
       },
       channel,
+    },
+    director: {
+      preset: direction.preset.id,
+      intent: direction.intent,
+      confidence: direction.confidence,
+      visualKeywords: direction.visualKeywords,
+      reasons: direction.reasons,
     },
     voice: {
       provider: "lucylab",
@@ -72,16 +83,17 @@ export function buildScript(input: CreateProjectInput): Script {
           subline: "Một cách đọc tỉnh táo hơn",
         },
         creative: {
-          tone: "cinematic",
-          accent: "amber",
-          background: "abstract",
-          motion: "push-in",
-          density: "balanced",
+          tone: direction.preset.tone,
+          accent: direction.preset.accent,
+          background: useSocialNewsCards ? "source-image" : "abstract",
+          motion: motionFor(direction, 0),
+          density: direction.intent === "legal-warning" ? "high-energy" : "balanced",
+          stylePreset: direction.preset.id,
         },
-        assetPrompt: `${title}, cinematic vertical social video background, editorial, high contrast`,
+        assetPrompt: `${title}, ${visualBrief}, vertical social video cover, ${direction.preset.label}, high contrast`,
         asset: {
           provider: "local",
-          prompt: `${title}, cinematic vertical social video background, editorial, high contrast`,
+          prompt: `${title}, ${visualBrief}, vertical social video cover, ${direction.preset.label}, high contrast`,
           status: "pending",
         },
       },
@@ -89,26 +101,29 @@ export function buildScript(input: CreateProjectInput): Script {
         id: "body-1",
         type: "body",
         voiceText: trimVoice(context, 26),
-        templateData: {
-          template: "steps",
-          title: compactTitle("Điểm cần chú ý", 38),
-          steps: buildSteps(keywords),
-        },
+        templateData: useSocialNewsCards
+          ? socialNewsCard(direction, "BỐI CẢNH", context, keywords[0] || title)
+          : {
+              template: "steps",
+              title: compactTitle("Điểm cần chú ý", 38),
+              steps: buildSteps(keywords),
+            },
         caption: {
           badge: "TÓM TẮT",
           headline: compactTitle("Đừng đọc lướt qua lớp nghĩa", 42),
           subline: "Tách ý chính trước khi kết luận",
         },
         creative: {
-          tone: "editorial",
-          accent: "lime",
-          background: "abstract",
-          motion: "pan-left",
-          density: "balanced",
+          tone: direction.preset.tone,
+          accent: direction.preset.accent,
+          background: useSocialNewsCards ? "source-image" : "abstract",
+          motion: motionFor(direction, 1),
+          density: direction.intent === "legal-warning" ? "high-energy" : "balanced",
+          stylePreset: direction.preset.id,
         },
         asset: {
           provider: "local",
-          prompt: `visual summary for ${title}, clean editorial diagram, vertical social video`,
+          prompt: `${visualBrief}, visual summary for ${title}, vertical social video scene`,
           status: "pending",
         },
       },
@@ -116,25 +131,28 @@ export function buildScript(input: CreateProjectInput): Script {
         id: "body-2",
         type: "body",
         voiceText: trimVoice(bodyA, 26),
-        templateData: {
-          template: "quote",
-          quote: compactTitle(extractKeyClaim(bodyA || content), 112),
-          attribution: "Ý chính",
-        },
+        templateData: useSocialNewsCards
+          ? socialNewsCard(direction, direction.intent === "legal-warning" ? "CẢNH BÁO" : "ĐIỂM CHÍNH", bodyA || content, keywords[1] || title)
+          : {
+              template: "quote",
+              quote: compactTitle(extractKeyClaim(bodyA || content), 112),
+              attribution: "Ý chính",
+            },
         caption: {
           badge: "NHẬN ĐỊNH",
           headline: compactTitle(keywords[1] ? `${capitalize(keywords[1])} là điểm mấu chốt` : "Điểm mấu chốt nằm ở cách nhìn", 42),
         },
         creative: {
-          tone: "minimal",
-          accent: "purple",
-          background: "gradient",
-          motion: "float",
-          density: "calm",
+          tone: useSocialNewsCards ? direction.preset.tone : "minimal",
+          accent: useSocialNewsCards ? direction.preset.accent : "purple",
+          background: useSocialNewsCards ? "source-image" : "gradient",
+          motion: motionFor(direction, 2),
+          density: direction.intent === "legal-warning" ? "high-energy" : "calm",
+          stylePreset: direction.preset.id,
         },
         asset: {
           provider: "local",
-          prompt: `symbolic quote visual for ${title}, dramatic paper texture, vertical composition`,
+          prompt: `${visualBrief}, key claim visual for ${title}, dramatic vertical composition`,
           status: "pending",
         },
       },
@@ -153,15 +171,16 @@ export function buildScript(input: CreateProjectInput): Script {
           subline: "Không nên gom tất cả thành một",
         },
         creative: {
-          tone: "studio",
-          accent: "cyan",
-          background: "abstract",
-          motion: "pull-out",
-          density: "balanced",
+          tone: direction.intent === "editorial-explainer" ? "studio" : direction.preset.tone,
+          accent: direction.intent === "editorial-explainer" ? "cyan" : direction.preset.accent,
+          background: direction.intent === "editorial-explainer" ? "abstract" : "source-image",
+          motion: motionFor(direction, 3),
+          density: direction.intent === "legal-warning" ? "high-energy" : "balanced",
+          stylePreset: direction.preset.id,
         },
         asset: {
           provider: "local",
-          prompt: `four key ideas from ${title}, editorial collage, vertical poster`,
+          prompt: `${visualBrief}, four key ideas from ${title}, editorial collage, vertical poster`,
           status: "pending",
         },
       },
@@ -180,15 +199,16 @@ export function buildScript(input: CreateProjectInput): Script {
           subline: "Tin ngay hay đối chiếu thêm?",
         },
         creative: {
-          tone: "social",
-          accent: "rose",
-          background: "abstract",
-          motion: "snap",
+          tone: direction.preset.tone,
+          accent: direction.preset.accent,
+          background: direction.intent === "editorial-explainer" ? "abstract" : "source-image",
+          motion: motionFor(direction, 4),
           density: "high-energy",
+          stylePreset: direction.preset.id,
         },
         asset: {
           provider: "local",
-          prompt: `final takeaway for ${title}, bold cinematic social video visual`,
+          prompt: `${visualBrief}, final takeaway for ${title}, bold cinematic social video visual`,
           status: "pending",
         },
       },
@@ -204,10 +224,11 @@ export function buildScript(input: CreateProjectInput): Script {
         },
         creative: {
           tone: "social",
-          accent: "amber",
+          accent: direction.preset.accent,
           background: "gradient",
-          motion: "push-in",
+          motion: motionFor(direction, 5),
           density: "balanced",
+          stylePreset: direction.preset.id,
         },
       },
     ],
@@ -349,6 +370,25 @@ function extractKeyClaim(text: string): string {
 function makeOutro(title: string): string {
   const short = compactTitle(title, 48);
   return `Với chủ đề ${short}, bạn thường tin ngay, hay sẽ tìm thêm nguồn khác để đối chiếu?`;
+}
+
+function socialNewsCard(
+  direction: ReturnType<typeof directVideo>,
+  label: string,
+  body: string,
+  headlineSeed: string,
+): Script["scenes"][number]["templateData"] {
+  const claim = extractKeyClaim(body);
+  const headline = compactTitle(`${label}: ${headlineSeed}`, 56).toUpperCase();
+  return {
+    template: "social-news-card",
+    source: direction.sourceLabel,
+    headline,
+    body: compactTitle(claim, 164),
+    footer: compactTitle(direction.preset.label, 42).toUpperCase(),
+    panel: direction.preset.panel,
+    headlineStyle: direction.preset.headlineStyle,
+  };
 }
 
 function trimVoice(text: string, maxWords: number): string {

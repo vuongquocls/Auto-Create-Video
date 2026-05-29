@@ -367,6 +367,7 @@ GEMINI_IMAGE_MODEL=gemini-2.5-flash-image    # default; ~7s mỗi call
 
 ```env
 TTS_CONCURRENCY=1    # 1 cho LucyLab (giới hạn API). Tăng cho ElevenLabs để parallel.
+AUTO_SFX=false       # Mặc định tắt tiếng chuyển cảnh tự động; dùng scene.sfx nếu cần SFX.
 ```
 
 ---
@@ -403,7 +404,21 @@ Nếu đã có sẵn `script.json` (debug hoặc tự viết kịch bản):
 npm run pipeline -- output/<slug>-<timestamp>/script.json
 ```
 
-### Cách 3 — Re-render visual không cần TTS (tiết kiệm quota)
+### Cách 3 — Studio local: tạo video và đăng nền tảng
+
+```bash
+npm run studio
+```
+
+Mở `http://localhost:8787`, dán nội dung hoặc ý tưởng, duyệt ảnh, render video rồi bấm **Đăng**. Mặc định Studio chạy `dry-run` để kiểm tra manifest/caption trước; muốn đăng thật thì cấu hình `.env.local` với `AUTO_PUBLISH_PLATFORMS=webhook,facebook,youtube,tiktok` và các token tương ứng.
+
+Bạn cũng có thể đăng từ CLI sau khi đã có `video.mp4`:
+
+```bash
+npm run publish -- output/<slug>-<timestamp> --platforms dry-run
+```
+
+### Cách 4 — Re-render visual không cần TTS (tiết kiệm quota)
 
 Nếu đã có voice files trong `voice/` và muốn render lại visual:
 
@@ -436,6 +451,9 @@ output/<slug>-<timestamp>/
 ├── animations.js              # GSAP timeline (self-contained)
 ├── hyperframes.json           # HyperFrames manifest
 ├── meta.json                  # HyperFrames metadata
+├── publish-manifest.json      # Manifest đăng nền tảng: caption, hash video, metadata
+├── publish-result.json        # Kết quả từng nền tảng sau lệnh publish
+├── publish-dry-run.json       # Kế hoạch đăng thử, không gọi API ngoài
 ├── thumbnail.png              # Cover 9:16 do Gemini sinh (nếu GEMINI_API_KEY set)
 └── video.mp4                  # 🎉 Output cuối — 1080×1920 @ 30fps + cover embed
 ```
@@ -507,7 +525,7 @@ Mỗi video gồm **persistent shell** xuyên suốt (header brand icon + tên c
 | `chart-bars` | `emphasis` → `success` | Bar reveal cascade |
 | `kinetic-quote` | `cinematic` → `drumroll` | Typographic reveal |
 
-Smart 3-tier picker (trong [`src/assets/sfx-selector.ts`](src/assets/sfx-selector.ts)) chọn theo thứ tự:
+Mặc định pipeline **không tự chèn SFX chuyển cảnh** để tránh tiếng thừa trong video pháp luật/cảnh báo. Nếu đặt `AUTO_SFX=true`, smart 3-tier picker (trong [`src/assets/sfx-selector.ts`](src/assets/sfx-selector.ts)) chọn theo thứ tự:
 
 1. **`scene.sfx`** override (set `"none"` để disable SFX cho scene đó)
 2. **Semantic match** trên `voiceText` (Việt + Anh) — vd `cảnh báo|warning|risk` → `alert`, `kỷ lục|record|breakthrough` → `success`, `ra mắt|launch|reveal` → `reveal`, `thất bại|fail|crash` → `fail`

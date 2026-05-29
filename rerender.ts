@@ -103,20 +103,6 @@ async function main() {
   const bgImageRelPath = fs.existsSync(bgImagePath) ? "images/bg.jpg" : null;
   console.log(`bgImage: ${bgImageRelPath ?? "(none — gradient fallback)"}`);
 
-  // TikTok avatar — find bundled (jpg/jpeg/png/webp) and copy to output dir
-  let bundledAvatar: string | null = null;
-  for (const ext of ["jpg", "jpeg", "png", "webp"]) {
-    const p = join(__dirname, "assets", `avatar.${ext}`);
-    if (existsSync(p)) { bundledAvatar = p; break; }
-  }
-  if (!bundledAvatar) {
-    throw new Error("No bundled avatar found. Place an image at assets/avatar.{jpg,png,webp}");
-  }
-  const ttAvatarExt = bundledAvatar.split(".").pop()!.toLowerCase();
-  const ttAvatarFile = `tiktok-avatar.${ttAvatarExt}`;
-  const ttAvatarOut = join(outputDir, ttAvatarFile);
-  // Always re-copy in case bundled was updated
-  await copyFile(bundledAvatar, ttAvatarOut);
 
   // Compose HTML
   const html = composeHtml({
@@ -125,9 +111,6 @@ async function main() {
     gapSec: SCENE_GAP_SEC,
     bgImageRelPath,
     audioRelPath: "voice.mp3",
-    tiktok: cfg.tiktok,
-    tiktokAvatarRelPath: ttAvatarFile,
-    outroHoldSec: 3,
   });
   await writeFile(join(outputDir, "index.html"), html);
   await writeFile(join(outputDir, "hyperframes.json"), JSON.stringify(HYPERFRAMES_CONFIG, null, 2));
@@ -138,6 +121,14 @@ async function main() {
   }, null, 2));
   await copyFile(join(TPL_DIR, "styles.css"),    join(outputDir, "styles.css"));
   await copyFile(join(TPL_DIR, "animations.js"), join(outputDir, "animations.js"));
+
+  // Copy brand logo into output assets/ so HTML can find it at assets/logo-vuon.png
+  const logoSrc = join(__dirname, "assets", "logo-vuon.png");
+  if (existsSync(logoSrc)) {
+    const { mkdir } = await import("node:fs/promises");
+    await mkdir(join(outputDir, "assets"), { recursive: true });
+    await copyFile(logoSrc, join(outputDir, "assets", "logo-vuon.png"));
+  }
 
   // Render
   const videoPath = join(outputDir, "video.mp4");

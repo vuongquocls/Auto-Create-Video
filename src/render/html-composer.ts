@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Script, TemplateDataType } from "./script-schema.js";
-import type { TiktokConfig } from "../config.js";
+
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const TPL_DIR = join(__dirname, "templates");
@@ -10,12 +10,7 @@ const TPL_DIR = join(__dirname, "templates");
 // Grain overlay HTML inline (from installed component)
 const GRAIN_OVERLAY_HTML = `<div id="grain-overlay" style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:100;"><div class="grain-texture"></div></div>`;
 
-// Default TikTok config (used if not passed)
-const DEFAULT_TIKTOK: TiktokConfig = {
-  displayName: "Công nghệ 24h",
-  handle: "@quocyokdon",
-  followers: "1.2M followers",
-};
+
 
 export interface SceneAudio {
   id: string;
@@ -28,28 +23,17 @@ export interface ComposeArgs {
   gapSec: number;
   bgImageRelPath: string | null;   // null => no image available
   audioRelPath: string;
-  /** TikTok follow card config (injected into outro scene). Optional — defaults used if omitted. */
-  tiktok?: TiktokConfig;
-  /** Relative path to avatar image inside the output dir (e.g. "tiktok-avatar.jpg"). */
-  tiktokAvatarRelPath?: string;
-  /** Extra seconds added to outro scene visual duration after voice ends (TikTok card hold). Default 3. */
-  outroHoldSec?: number;
 }
 
 export function composeHtml(args: ComposeArgs): string {
   const { script, sceneAudio, gapSec, bgImageRelPath, audioRelPath } = args;
-  const tiktok = args.tiktok ?? DEFAULT_TIKTOK;
-  const tiktokAvatar = args.tiktokAvatarRelPath ?? "tiktok-avatar.jpg";
-  const outroHoldSec = args.outroHoldSec ?? 3;
 
-  // Compute timing per scene. Outro scene gets extra HOLD seconds so the
-  // TikTok follow card stays visible after the voice ends.
+  // Compute timing per scene
   let cursor = 0;
   const timing = script.scenes.map((scene) => {
     const audio = sceneAudio.find((a) => a.id === scene.id);
     if (!audio) throw new Error(`No audio entry for scene id=${scene.id}`);
-    const isOutro = scene.type === "outro";
-    const dur = audio.durationSec + gapSec + (isOutro ? outroHoldSec : 0);
+    const dur = audio.durationSec + gapSec;
     const start = cursor;
     cursor += dur;
     return { scene, start, duration: dur };
@@ -58,11 +42,11 @@ export function composeHtml(args: ComposeArgs): string {
 
   // Render scenes
   const sceneHtml = timing.map(({ scene, start, duration }) => {
-    return renderScene(scene, start, duration, bgImageRelPath, tiktok, tiktokAvatar);
+    return renderScene(scene, start, duration, bgImageRelPath);
   }).join("\n");
 
   // Persistent shell — minimal footer watermark only
-  const shellHtml = renderShell(script.metadata, tiktok);
+  const shellHtml = renderShell(script.metadata);
 
   const animJs = readFileSync(join(TPL_DIR, "animations.js"), "utf8");
 
@@ -77,10 +61,12 @@ export function composeHtml(args: ComposeArgs): string {
 }
 
 // ── PERSISTENT SHELL ───────────────────────────────────────────────────────
-function renderShell(_metadata: Script["metadata"], _tiktok: TiktokConfig): string {
+function renderShell(_metadata: Script["metadata"]): string {
   return `
 <!-- Shell: persistent brand elements (no data-start → always visible) -->
 <div class="shell-bg"></div>
+
+<img class="yokdon-logo" src="assets/logo-vuon.png" alt="Vườn quốc gia Yok Đôn" onerror="this.style.display='none'" />
 
 <div class="brand-shell-handle">
   <span class="handle-music">&#9835;</span>
@@ -96,8 +82,6 @@ function renderScene(
   start: number,
   duration: number,
   bgImageRelPath: string | null,
-  tiktok: TiktokConfig,
-  tiktokAvatarRelPath: string,
 ): string {
   const td = scene.templateData;
   const sceneImageRelPath = scene.asset?.status === "ready" && scene.asset.image
@@ -132,6 +116,10 @@ function renderScene(
       inner = renderImageCardInner(td, sceneImageRelPath);
       layoutName = "image-card";
       break;
+    case "social-news-card":
+      inner = renderSocialNewsCardInner(td, sceneImageRelPath);
+      layoutName = "social-news-card";
+      break;
     case "quote":
       inner = renderQuoteInner(td);
       layoutName = "quote";
@@ -145,7 +133,7 @@ function renderScene(
       layoutName = "timeline";
       break;
     case "outro":
-      inner = renderOutroInner(td, tiktok, tiktokAvatarRelPath);
+      inner = renderOutroInner(td);
       layoutName = "outro";
       break;
     default: {
@@ -264,6 +252,28 @@ function renderImageCardInner(td: Extract<TemplateDataType, { template: "image-c
 </div>`.trim();
 }
 
+// ── SOCIAL NEWS CARD SCENE ────────────────────────────────────────────────
+function renderSocialNewsCardInner(td: Extract<TemplateDataType, { template: "social-news-card" }>, bgImageRelPath: string | null): string {
+  const media = bgImageRelPath
+    ? `<div class="social-news-photo" style="background-image: url('${bgImageRelPath}')"></div>`
+    : `<div class="social-news-photo social-news-photo-fallback"></div>`;
+  const footer = td.footer ? `<div class="social-news-footer">${escapeHtml(td.footer)}</div>` : "";
+  return `
+<div class="layout-social-news-card panel-${td.panel} headline-${td.headlineStyle}">
+  <div class="social-news-visual">
+    <div class="social-news-blur">${media}</div>
+    ${media}
+    <div class="social-news-vignette"></div>
+  </div>
+  <div class="social-news-panel">
+    <div class="social-news-source">${escapeHtml(td.source)}</div>
+    <div class="social-news-headline shimmer-sweep-target">${escapeHtml(td.headline)}</div>
+    <div class="social-news-body">${escapeHtml(td.body)}</div>
+    ${footer}
+  </div>
+</div>`.trim();
+}
+
 // ── QUOTE SCENE ───────────────────────────────────────────────────────────
 function renderQuoteInner(td: Extract<TemplateDataType, { template: "quote" }>): string {
   const attr = td.attribution ? `<div class="quote-attr">${escapeHtml(td.attribution)}</div>` : "";
@@ -310,8 +320,6 @@ function renderTimelineInner(td: Extract<TemplateDataType, { template: "timeline
 // ── OUTRO SCENE ────────────────────────────────────────────────────────────
 function renderOutroInner(
   td: Extract<TemplateDataType, { template: "outro" }>,
-  _tiktok: TiktokConfig,
-  _avatarRelPath: string,
 ): string {
   return `
 <div class="layout-outro">
@@ -334,12 +342,13 @@ function buildScene(
   const creative = scene.creative;
   const accent = creative?.accent ?? defaultAccent(layoutName);
   const tone = creative?.tone ?? "studio";
+  const motion = creative?.motion ?? "push-in";
   const bg = renderSceneAtmosphere(scene, bgImageRelPath, layoutName);
   const caption = renderCaption(scene);
   return `
 <div class="scene clip" id="scene-${scene.id}"
      data-start="${start.toFixed(2)}" data-duration="${duration.toFixed(2)}" data-active="0"
-     data-layout="${layoutName}" data-accent="${accent}" data-tone="${tone}">
+     data-layout="${layoutName}" data-accent="${accent}" data-tone="${tone}" data-motion="${motion}">
   ${bg}
   ${innerHtml}
   ${caption}
@@ -354,7 +363,7 @@ function defaultAccent(layoutName: string): string {
 }
 
 function renderSceneAtmosphere(scene: Script["scenes"][number], bgImageRelPath: string | null, layoutName: string): string {
-  if (layoutName === "hook" || layoutName === "outro") return "";
+  if (layoutName === "hook" || layoutName === "outro" || layoutName === "social-news-card") return "";
   const creative = scene.creative;
   const bg = creative?.background ?? "abstract";
   const motion = creative?.motion ?? "push-in";

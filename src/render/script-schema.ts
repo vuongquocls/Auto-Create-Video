@@ -51,6 +51,16 @@ const ImageCardData = z.object({
   detail: z.string().min(1).max(70).optional(),
 });
 
+const SocialNewsCardData = z.object({
+  template: z.literal("social-news-card"),
+  source: z.string().min(1).max(34),
+  headline: z.string().min(1).max(58),
+  body: z.string().min(1).max(170),
+  footer: z.string().max(46).optional(),
+  panel: z.enum(["orange", "red", "forest", "navy"]).default("orange"),
+  headlineStyle: z.enum(["yellow-outline", "white-outline", "clean-white"]).default("yellow-outline"),
+});
+
 const QuoteData = z.object({
   template: z.literal("quote"),
   quote: z.string().min(1).max(120),
@@ -86,6 +96,7 @@ export const TemplateData = z.discriminatedUnion("template", [
   FeatureListData,
   CalloutData,
   ImageCardData,
+  SocialNewsCardData,
   QuoteData,
   StepsData,
   TimelineData,
@@ -129,8 +140,22 @@ const Scene = z.object({
     tone: z.enum(["studio", "editorial", "breaking", "social", "cinematic", "minimal"]).default("studio"),
     accent: z.enum(["cyan", "purple", "amber", "rose", "lime", "blue"]).default("cyan"),
     background: z.enum(["source-image", "abstract", "gradient", "split", "none"]).default("abstract"),
-    motion: z.enum(["push-in", "pull-out", "pan-left", "pan-right", "snap", "float"]).default("push-in"),
+    motion: z.enum([
+      "push-in",
+      "pull-out",
+      "pan-left",
+      "pan-right",
+      "snap",
+      "float",
+      "slow-zoom",
+      "collage-push",
+      "blur-depth",
+      "urgent-pulse",
+      "handheld-pan",
+      "zoom-cut",
+    ]).default("push-in"),
     density: z.enum(["calm", "balanced", "high-energy"]).default("balanced"),
+    stylePreset: z.string().min(1).max(80).optional(),
   }).optional(),
   asset: z.object({
     provider: z.enum(["local", "openai", "stock", "manual"]).default("local"),
@@ -161,8 +186,15 @@ export const ScriptSchema = z.object({
     }),
     channel: z.string().min(1),
   }),
+  director: z.object({
+    preset: z.string().min(1),
+    intent: z.string().min(1),
+    confidence: z.number().min(0).max(1),
+    visualKeywords: z.array(z.string().min(1)).default([]),
+    reasons: z.array(z.string().min(1)).default([]),
+  }).optional(),
   voice: z.object({
-    provider: z.literal("lucylab"),
+    provider: z.enum(["lucylab", "elevenlabs", "supertonic", "vieneu"]),
     voiceId: z.string().min(1),
     speed: z.number().min(0.5).max(2.0),
   }),

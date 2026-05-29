@@ -25,7 +25,7 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 export class ElevenLabsClient implements TtsClient {
   constructor(private cfg: ElevenLabsOpts) {}
 
-  async generate(text: string, audioOutPath: string, _srtOutPath?: string): Promise<void> {
+  async generate(text: string, audioOutPath: string, _srtOutPath?: string, _speed?: number): Promise<void> {
     await this.synthesizeWithRetry(text, audioOutPath);
     // ElevenLabs has no SRT — silently skip srtOutPath.
   }

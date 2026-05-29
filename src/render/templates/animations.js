@@ -44,6 +44,8 @@ window.__timelines["news-video"] = tl;
       animateCallout(scene, tl, start);
     } else if (layout === "image-card") {
       animateImageCard(scene, tl, start);
+    } else if (layout === "social-news-card") {
+      animateSocialNewsCard(scene, tl, start, dur);
     } else if (layout === "quote") {
       animateQuote(scene, tl, start);
     } else if (layout === "steps") {
@@ -165,6 +167,49 @@ window.__timelines["news-video"] = tl;
     const detail = scene.querySelector(".image-card-detail");
     if (detail) {
       tl.fromTo(detail, { y: 32, opacity: 0 }, { y: 0, opacity: 1, duration: 0.42 }, start + 0.78);
+    }
+  }
+
+  // ── SOCIAL NEWS CARD ─────────────────────────────────────────────────
+  function animateSocialNewsCard(scene, tl, start, dur) {
+    const photos = scene.querySelectorAll(".social-news-photo");
+    const motion = scene.dataset.motion || scene.querySelector(".scene-atmosphere")?.className || "";
+    const isUrgent = motion.includes("urgent") || scene.dataset.tone === "breaking";
+    const fromScale = motion.includes("pull-out") ? 1.16 : 1.02;
+    const toScale = motion.includes("zoom-cut") || motion.includes("urgent") ? 1.18 : 1.10;
+    const fromX = motion.includes("pan-left") || motion.includes("handheld") ? 34 : motion.includes("pan-right") ? -34 : 0;
+    const toX = motion.includes("pan-left") ? -34 : motion.includes("pan-right") || motion.includes("handheld") ? 34 : 0;
+    photos.forEach((photo) => {
+      tl.fromTo(photo, { x: fromX, scale: fromScale, opacity: 0 }, { x: toX, scale: toScale, opacity: 1, duration: Math.max(2.2, dur - 0.2) }, start + 0.05);
+    });
+
+    const panel = scene.querySelector(".social-news-panel");
+    if (panel) {
+      tl.fromTo(panel, { y: 90, opacity: 0 }, { y: 0, opacity: 1, duration: isUrgent ? 0.32 : 0.48 }, start + 0.12);
+    }
+
+    const source = scene.querySelector(".social-news-source");
+    if (source) {
+      tl.fromTo(source, { x: -30, opacity: 0 }, { x: 0, opacity: 1, duration: 0.28 }, start + 0.28);
+    }
+
+    const headline = scene.querySelector(".social-news-headline");
+    if (headline) {
+      tl.fromTo(headline, { y: 44, scale: isUrgent ? 0.94 : 1, opacity: 0 }, { y: 0, scale: 1, opacity: 1, duration: 0.45 }, start + 0.4);
+      const mask = headline.querySelector(".shimmer-mask");
+      if (mask) {
+        tl.fromTo(mask, { x: "-120%" }, { x: "120%", duration: 0.9 }, start + 0.95);
+      }
+    }
+
+    const body = scene.querySelector(".social-news-body");
+    if (body) {
+      tl.fromTo(body, { y: 34, opacity: 0 }, { y: 0, opacity: 1, duration: 0.38 }, start + 0.72);
+    }
+
+    const footer = scene.querySelector(".social-news-footer");
+    if (footer) {
+      tl.fromTo(footer, { y: 20, opacity: 0 }, { y: 0, opacity: 1, duration: 0.3 }, start + 1.0);
     }
   }
 
