@@ -293,10 +293,12 @@ async function stopForAssetReviewIfNeeded(
     });
     await writeFile(scriptPath, JSON.stringify(script, null, 2));
     await writeAssetReviewFile(outputDir, script, "prepared");
-    printAssetReviewSummary(outputDir, script);
-    console.log("\nĐã chuẩn bị ảnh minh họa và tạm dừng trước bước render.");
-    console.log("Hãy kiểm tra ảnh, bổ sung/thay ảnh nếu cần, rồi xác nhận duyệt ảnh trước khi render.");
-    return true;
+    if (options.prepareAssetsOnly || !options.assetsApproved) {
+      printAssetReviewSummary(outputDir, script);
+      console.log("\nĐã chuẩn bị ảnh minh họa và tạm dừng trước bước render.");
+      console.log("Hãy kiểm tra ảnh, bổ sung/thay ảnh nếu cần, rồi xác nhận duyệt ảnh trước khi render.");
+      return true;
+    }
   }
 
   await writeAssetReviewFile(outputDir, script, "ready");
