@@ -18,7 +18,7 @@ const PORT = Number.parseInt(process.env.RENDER_WORKER_PORT || "8088", 10);
 const TOKEN = process.env.RENDER_WORKER_TOKEN || "";
 const PIPELINE_SCRIPT = process.env.RENDER_PIPELINE_SCRIPT || "pipeline";
 const TIMEOUT_MS = Number.parseInt(process.env.RENDER_TIMEOUT_SECONDS || "1200", 10) * 1000;
-const BODY_LIMIT_BYTES = Number.parseInt(process.env.RENDER_BODY_LIMIT_BYTES || `${2 * 1024 * 1024}`, 10);
+const BODY_LIMIT_BYTES = Number.parseInt(process.env.RENDER_BODY_LIMIT_BYTES || `${25 * 1024 * 1024}`, 10);
 
 type JsonValue = Record<string, any>;
 
@@ -106,6 +106,28 @@ async function saveJob(job: JobRecord): Promise<void> {
   await writeFile(join(job.job_dir, "job.json"), JSON.stringify(job, null, 2), "utf8");
 }
 
+function safeAssetRelPath(value: string): string {
+  const rel = String(value || "").replace(/^\/+/, "");
+  if (!rel || rel.includes("..") || rel.startsWith(".") || rel.includes("\0")) {
+    throw httpError(400, "asset rel_path không an toàn.");
+  }
+  return rel;
+}
+
+async function writeAssetFiles(dir: string, assets: unknown): Promise<void> {
+  if (!Array.isArray(assets)) return;
+  for (const item of assets) {
+    if (!item || typeof item !== "object") continue;
+    const relPath = safeAssetRelPath((item as any).rel_path || (item as any).path || "");
+    const b64 = String((item as any).b64 || "");
+    if (!b64) continue;
+    const outPath = resolve(dir, relPath);
+    if (!(outPath.startsWith(dir + "/") || outPath === dir)) throw httpError(400, "asset path vượt khỏi job_dir.");
+    await mkdir(dirname(outPath), { recursive: true });
+    await writeFile(outPath, Buffer.from(b64, "base64"));
+  }
+}
+
 async function readJob(jobId: string): Promise<JobRecord> {
   const path = join(jobDir(jobId), "job.json");
   try {
@@ -156,6 +178,7 @@ async function handleRender(req: IncomingMessage, res: ServerResponse): Promise<
   await mkdir(dir, { recursive: true });
   const scriptPath = join(dir, "script.json");
   const videoPath = join(dir, "video.mp4");
+  await writeAssetFiles(dir, body.asset_files);
   await writeFile(scriptPath, JSON.stringify(script, null, 2), "utf8");
 
   const job: JobRecord = {
